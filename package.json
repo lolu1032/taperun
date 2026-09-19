@@ -1,0 +1,11 @@
+{
+  "name": "taperun",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  },
+  "dependencies": {
+    "playwright": "^1.58.0"
+  }
+}

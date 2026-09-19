@@ -1,0 +1,10 @@
+{
+  "name": "example-com",
+  "baseURL": "https://example.com",
+  "steps": [
+    { "goto": "/" },
+    { "expect": { "text": "Example Domain" } },
+    { "click": "text=Learn more" },
+    { "expect": { "url": "iana.org" } }
+  ]
+}
