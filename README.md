@@ -65,3 +65,7 @@ node scripts/emit-test.mjs examples/example-com.json > example.spec.ts
 ```bash
 npm test   # 실제 크롬으로 실행·실패·커서, 리포트, 테스트코드 변환
 ```
+
+## 라이선스
+
+MIT
