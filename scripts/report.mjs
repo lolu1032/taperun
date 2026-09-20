@@ -15,7 +15,7 @@ const CSS = `
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,"Pretendard",system-ui,sans-serif}
 .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 64px}
 header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}h1{font-size:24px;margin:0;letter-spacing:-.01em}
-.pill{font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.ok{background:var(--ok)}.pill.fail{background:var(--fail)}
+.pill{font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.ok{background:var(--ok)}.pill.fail{background:var(--fail)}.pill.run{background:var(--muted)}
 .meta{color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin:0 0 24px}.meta span::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--line);margin-right:8px;vertical-align:middle}
 .grid{display:grid;grid-template-columns:1fr;gap:20px}@media(min-width:820px){.grid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
@@ -87,6 +87,8 @@ export function renderIndex(runs, broken = []) {
   }
   const latest = [...byName.values()].map((v) => v[0]);
   const bad = latest.filter((x) => (x.error && !x.running) || (x.r && !x.r.ok)).length; // 실행 중은 실패로 안 센다
+  const running = latest.filter((x) => x.running).length;
+  const badge = bad ? { cls: "fail", text: `FAIL ${bad}` } : running ? { cls: "run", text: `RUNNING ${running}` } : { cls: "ok", text: "ALL PASS" };
 
   const tag = (x) => (x.running ? '<span class="tag run">RUNNING</span>' : x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
   const li = (x, history) => {
@@ -104,9 +106,9 @@ ${history.length ? `<details class="hist"><summary>이전 실행 ${history.lengt
   };
 
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>taperun — ${bad ? `실패 ${bad}` : "전체 통과"}</title><style>${CSS}</style>
+<title>taperun — ${bad ? `실패 ${bad}` : running ? `실행 중 ${running}` : "전체 통과"}</title><style>${CSS}</style>
 <div class="wrap">
-<header><h1>taperun</h1><span class="pill ${bad ? "fail" : "ok"}">${bad ? `FAIL ${bad}` : "ALL PASS"}</span></header>
+<header><h1>taperun</h1><span class="pill ${badge.cls}">${badge.text}</span></header>
 <p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${items.length}회</span><span>마지막 ${latest.length && latest[0].at ? when(latest[0].at) : "-"}</span></p>
 <div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
 </div></html>`;

@@ -113,7 +113,8 @@ test("a run still in progress shows RUNNING and is not counted as failure", asyn
   mkdirSync(pjoin(out, "browse-old")); writeFileSync(pjoin(out, "browse-old", "result.json"), JSON.stringify({ ...base, name: "browse", ok: true, startedAt: "2026-09-21T10:00:00.000Z", steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
   mkdirSync(pjoin(out, "browse-now")); writeFileSync(pjoin(out, "browse-now", "started.json"), JSON.stringify({ name: "browse", startedAt: new Date().toISOString() }));
   const html = readFileSync((await buildIndex(out)).index, "utf8");
-  assert.match(html, /RUNNING/);
-  assert.match(html, /ALL PASS/, "실행 중은 실패로 세지 않는다");
+  assert.match(html, /RUNNING 1/, "헤더도 실행 중으로 표시");
+  assert.doesNotMatch(html, /ALL PASS|전체 통과/, "아직 안 끝났으면 전체 통과라고 하지 않는다");
+  assert.doesNotMatch(html, /FAIL/, "실행 중은 실패로 세지 않는다");
   assert.doesNotMatch(html, /실행이 끝나지 않았다/);
 });
