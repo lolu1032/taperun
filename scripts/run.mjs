@@ -26,6 +26,9 @@ export const CURSOR_SCRIPT = `(() => {
   document.addEventListener("mousedown", () => { el.classList.remove("click"); void el.offsetWidth; el.classList.add("click"); }, true);
 })();`;
 
+// 폴더 이름 한 칸으로 쓸 수 있게. 한글은 그대로 두고 경로·URL을 깨는 문자만 바꾼다
+export const safeName = (name) => (String(name).replace(/[/\\?#%:*"<>|\u0000-\u001f]+/g, "-").replace(/^[.\s]+|[.\s]+$/g, "") || "run");
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let cur = { x: 640, y: 400 };
 // 요소 중앙까지 커서를 부드럽게 이동 (영상에서 보이게). 요소 없으면 그냥 통과 → 뒤의 click/fill이 제대로 실패함
@@ -40,7 +43,7 @@ async function glide(page, selector) {
 
 export async function run(scenario, { out = ".taperun/out", headed = false } = {}) {
   const startedAt = new Date();
-  const outDir = resolve(out, `${scenario.name}-${startedAt.toISOString().replace(/[:.]/g, "-")}`);
+  const outDir = resolve(out, `${safeName(scenario.name)}-${startedAt.toISOString().replace(/[:.]/g, "-")}`);
   await mkdir(outDir, { recursive: true });
 
   // 기본은 매번 새 프로필(재현 가능). 카카오/네이버처럼 로그인 세션이 필요한 흐름만 "profile": "shared"로 전용 프로필 사용
@@ -98,8 +101,13 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
   };
   await writeFile(join(outDir, "result.json"), JSON.stringify(result, null, 2));
   await writeFile(join(outDir, "report.html"), render(result));
-  const { index } = await buildIndex(resolve(out));
-  return { ...result, report: join(outDir, "report.html"), index };
+  const out2 = { ...result, report: join(outDir, "report.html") };
+  try {
+    out2.index = (await buildIndex(resolve(out))).index; // 목록 생성 실패가 실행 결과를 못 덮게
+  } catch (e) {
+    out2.indexError = String(e.message ?? e);
+  }
+  return out2;
 }
 
 // 단계 어휘: goto / click / fill / expect — emit-test.mjs와 공유
@@ -126,6 +134,6 @@ if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pat
   const scenario = JSON.parse(await readFile(file, "utf8"));
   const outIdx = flags.indexOf("--out");
   const r = await run(scenario, { out: outIdx >= 0 ? flags[outIdx + 1] : undefined, headed: flags.includes("--headed") });
-  console.log(JSON.stringify({ ok: r.ok, report: r.report, index: r.index, video: r.video, failed: r.steps.find((s) => !s.ok) ?? null }, null, 2));
+  console.log(JSON.stringify({ ok: r.ok, report: r.report, index: r.index ?? null, indexError: r.indexError ?? null, video: r.video, failed: r.steps.find((s) => !s.ok) ?? null }, null, 2));
   process.exit(r.ok ? 0 : 1);
 }

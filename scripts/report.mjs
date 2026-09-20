@@ -70,9 +70,10 @@ ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed
 }
 
 const when = (iso) => iso.replace("T", " ").slice(0, 16);
+const enc = (s) => encodeURIComponent(s);
 
 // runs: [{ dir, r }] — 시나리오별로 묶어 최신 실행을 위에, 나머지는 접어서
-export function renderIndex(runs) {
+export function renderIndex(runs, broken = []) {
   const byName = new Map();
   for (const x of [...runs].sort((a, b) => (a.r.startedAt < b.r.startedAt ? 1 : -1))) {
     if (!byName.has(x.r.name)) byName.set(x.r.name, []);
@@ -86,34 +87,43 @@ export function renderIndex(runs) {
     return `<li>
 <div class="row"><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span class="name">${esc(r.name)}</span>
 <span class="when">${when(r.startedAt)}</span><span class="nums">${r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(r.durationMs)}</span>
-<span class="links"><a href="${esc(dir)}/report.html">리포트</a><a href="${esc(dir)}/${esc(basename(r.video))}">영상</a></span></div>
+<span class="links"><a href="${esc(enc(dir))}/report.html">리포트</a><a href="${esc(enc(dir))}/${esc(enc(basename(r.video)))}">영상</a></span></div>
 ${f ? `<p class="why">${f.i + 1}단계 ${esc(verb(f.step))} ${esc(args(f.step))} — ${esc(f.error)}</p>` : ""}
-${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map(({ dir, r }) => `<li><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span>${when(r.startedAt)}</span><span>${fmtMs(r.durationMs)}</span><span class="links"><a href="${esc(dir)}/report.html">리포트</a></span></li>`).join("")}</ol></details>` : ""}
+${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map(({ dir, r }) => `<li><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span>${when(r.startedAt)}</span><span>${fmtMs(r.durationMs)}</span><span class="links"><a href="${esc(enc(dir))}/report.html">리포트</a></span></li>`).join("")}</ol></details>` : ""}
 </li>`;
   };
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>taperun — ${failed.length ? `실패 ${failed.length}` : "전체 통과"}</title><style>${CSS}</style>
+<title>taperun — ${failed.length || broken.length ? `실패 ${failed.length + broken.length}` : "전체 통과"}</title><style>${CSS}</style>
 <div class="wrap">
-<header><h1>taperun</h1><span class="pill ${failed.length ? "fail" : "ok"}">${failed.length ? `FAIL ${failed.length}` : "ALL PASS"}</span></header>
+<header><h1>taperun</h1><span class="pill ${failed.length || broken.length ? "fail" : "ok"}">${failed.length || broken.length ? `FAIL ${failed.length + broken.length}` : "ALL PASS"}</span></header>
 <p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${runs.length}회</span><span>마지막 ${latest.length ? when(latest[0].r.startedAt) : "-"}</span></p>
-<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
+<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}${broken.map(({ dir, error }) => `<li><div class="row"><span class="tag fail">ERROR</span><span class="name">${esc(dir)}</span><span class="when">읽지 못함</span></div><p class="why">${esc(error)}</p></li>`).join("")}</ol></div>
 </div></html>`;
 }
 
 // out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
 export async function buildIndex(outDir) {
   const dirs = (await readdir(outDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
-  const runs = [];
+  const runs = [], broken = [];
   for (const dir of dirs) {
+    let raw;
     try {
-      const r = JSON.parse(await readFile(join(outDir, dir, "result.json"), "utf8"));
+      raw = await readFile(join(outDir, dir, "result.json"), "utf8");
+    } catch (e) {
+      if (e.code !== "ENOENT") broken.push({ dir, error: String(e.message ?? e) }); // 실행 폴더가 아닌 것만 조용히 건너뛴다
+      continue;
+    }
+    try {
+      const r = JSON.parse(raw);
       await writeFile(join(outDir, dir, "report.html"), render(r));
       runs.push({ dir, r });
-    } catch { /* result.json 없는 폴더는 건너뛴다 */ }
+    } catch (e) {
+      broken.push({ dir, error: String(e.message ?? e) }); // 깨진 결과를 index에서 숨기지 않는다
+    }
   }
   const index = join(outDir, "index.html");
-  await writeFile(index, renderIndex(runs));
-  return { index, count: runs.length };
+  await writeFile(index, renderIndex(runs, broken));
+  return { index, count: runs.length, broken: broken.length };
 }
 
 if (process.argv[1] && new URL(import.meta.url).pathname.endsWith(basename(process.argv[1]))) {

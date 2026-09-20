@@ -55,3 +55,13 @@ test("virtual cursor follows mouse and survives navigation", async () => {
     assert.equal(await pos(), "translate(123px,45px)", "position kept across navigation");
   } finally { await b.close(); }
 });
+
+test("index failure does not hide the run result", async () => {
+  const { mkdirSync } = await import("node:fs");
+  const out = new URL("../.test-out/idx-fail/", import.meta.url).pathname;
+  mkdirSync(out + "index.html", { recursive: true }); // index.html 자리를 폴더로 막아 쓰기를 실패시킨다
+  const r = await run({ name: "idxfail", baseURL, steps: [{ goto: "/" }] }, { out });
+  assert.equal(r.ok, true, "실행 결과는 그대로 나온다");
+  assert.ok(r.report, "개별 리포트는 만들어진다");
+  assert.ok(r.indexError, "목록 실패는 따로 알린다");
+});
