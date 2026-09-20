@@ -5,6 +5,7 @@ import { chromium } from "playwright";
 import { mkdir, mkdtemp, rm, writeFile, rename } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { homedir, tmpdir } from "node:os";
+import { render, buildIndex } from "./report.mjs";
 
 const PROFILE = join(homedir(), ".taperun", "chrome");
 const STEP_TIMEOUT = 10_000;
@@ -96,7 +97,9 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
     video: videoPath, steps, skipped: scenario.steps.length - steps.length, console: console_,
   };
   await writeFile(join(outDir, "result.json"), JSON.stringify(result, null, 2));
-  return result;
+  await writeFile(join(outDir, "report.html"), render(result));
+  const { index } = await buildIndex(resolve(out));
+  return { ...result, report: join(outDir, "report.html"), index };
 }
 
 // 단계 어휘: goto / click / fill / expect — emit-test.mjs와 공유
@@ -123,6 +126,6 @@ if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pat
   const scenario = JSON.parse(await readFile(file, "utf8"));
   const outIdx = flags.indexOf("--out");
   const r = await run(scenario, { out: outIdx >= 0 ? flags[outIdx + 1] : undefined, headed: flags.includes("--headed") });
-  console.log(JSON.stringify({ ok: r.ok, video: r.video, failed: r.steps.find((s) => !s.ok) ?? null }, null, 2));
+  console.log(JSON.stringify({ ok: r.ok, report: r.report, index: r.index, video: r.video, failed: r.steps.find((s) => !s.ok) ?? null }, null, 2));
   process.exit(r.ok ? 0 : 1);
 }

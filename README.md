@@ -22,15 +22,16 @@ Claude Code에서: `로그인 기능 e2e 해줘`
 1. **파악** — 기능이 지나가는 라우트·폼·버튼, 필요한 env/DB/계정을 읽어 `.taperun/e2e-map.md`에 남긴다
 2. **시나리오** — `.taperun/scenarios/<name>.json` (goto / click / fill / expect)
 3. **실행** — 크롬에서 녹화하며 실행. 첫 실패 단계에서 멈춘다
-4. **보고** — `report.html`: 영상, 단계별 결과, 실패 스크린샷, 콘솔·네트워크 에러
+4. **보고** — `report.html`: 영상, 단계별 결과, 실패 스크린샷, 콘솔·네트워크 에러. 시나리오가 여러 개면 `index.html`에 최신 상태가 한 줄씩
 5. **테스트코드** — 원하면 `*.spec.ts`로 변환
 
 ## 스크립트만 쓰기
 
 ```bash
-node scripts/run.mjs examples/example-com.json            # 헤드리스
+node scripts/run.mjs examples/example-com.json            # 헤드리스. 영상·리포트·index까지 한 번에
 node scripts/run.mjs examples/example-com.json --headed   # 창 띄워서
-node scripts/report.mjs .taperun/out/example-com-*/result.json
+open .taperun/out/index.html                              # 시나리오별 최신 상태 한 화면
+node scripts/report.mjs .taperun/out                      # 리포트·index만 다시 만들기
 node scripts/emit-test.mjs examples/example-com.json > example.spec.ts
 ```
 

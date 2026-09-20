@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// result.json → report.html (같은 폴더에 씀. 영상·스크린샷은 상대경로)
-// usage: node report.mjs result.json
-import { readFile, writeFile } from "node:fs/promises";
+// result.json → report.html, 또는 out 폴더 → index.html(시나리오별 최신 + 히스토리)
+// usage: node report.mjs <result.json | out-dir>
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -31,6 +31,13 @@ pre{margin:0;font:12.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-a
 details summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px}
 .stat{display:flex;gap:18px;margin-bottom:14px}.stat b{display:block;font-size:22px;letter-spacing:-.02em}.stat small{color:var(--muted)}
 .bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden;display:flex}.bar i{display:block;height:100%}.bar .ok{background:var(--ok)}.bar .fail{background:var(--fail)}
+.back{display:inline-block;color:var(--muted);text-decoration:none;margin-bottom:12px}.back:hover{color:var(--accent)}
+.runs{list-style:none;margin:0;padding:0}.runs li{border-top:1px solid var(--line);padding:12px 0}.runs li:first-child{border-top:0}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.row .name{font-weight:600;font-size:15px}.row .when,.row .nums{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;letter-spacing:.04em}.tag.ok{background:var(--ok)}.tag.fail{background:var(--fail)}
+.links{margin-left:auto;display:flex;gap:10px}.links a{color:var(--accent);text-decoration:none;font-size:13px}.links a:hover{text-decoration:underline}
+.why{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--fail-bg);border:1px solid var(--fail);font:12.5px/1.5 var(--mono);word-break:break-all}
+.hist{margin-top:8px}.hist summary{cursor:pointer;color:var(--muted);font-size:12px}.hist ol{list-style:none;margin:8px 0 0;padding:0}.hist li{display:flex;gap:10px;align-items:center;padding:4px 0;font-size:12px;color:var(--muted);border:0}
 `;
 
 export function render(r) {
@@ -45,6 +52,7 @@ export function render(r) {
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(r.name)} — ${r.ok ? "PASS" : "FAIL"}</title><style>${CSS}</style>
 <div class="wrap">
+<a class="back" href="../index.html">← 전체</a>
 <header><h1>${esc(r.name)}</h1><span class="pill ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span></header>
 <p class="meta"><span>${esc(r.startedAt.replace("T", " ").slice(0, 19))}</span><span>${fmtMs(r.durationMs)}</span><span>${passed}/${total} 단계${r.skipped ? ` · ${r.skipped} 건너뜀` : ""}</span></p>
 <div class="grid">
@@ -61,11 +69,63 @@ ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed
 </div></html>`;
 }
 
+const when = (iso) => iso.replace("T", " ").slice(0, 16);
+
+// runs: [{ dir, r }] — 시나리오별로 묶어 최신 실행을 위에, 나머지는 접어서
+export function renderIndex(runs) {
+  const byName = new Map();
+  for (const x of [...runs].sort((a, b) => (a.r.startedAt < b.r.startedAt ? 1 : -1))) {
+    if (!byName.has(x.r.name)) byName.set(x.r.name, []);
+    byName.get(x.r.name).push(x);
+  }
+  const latest = [...byName.values()].map((v) => v[0]);
+  const failed = latest.filter((x) => !x.r.ok);
+  const li = ({ dir, r }, history) => {
+    const f = r.steps.find((s) => !s.ok);
+    const total = r.steps.length + r.skipped;
+    return `<li>
+<div class="row"><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span class="name">${esc(r.name)}</span>
+<span class="when">${when(r.startedAt)}</span><span class="nums">${r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(r.durationMs)}</span>
+<span class="links"><a href="${esc(dir)}/report.html">리포트</a><a href="${esc(dir)}/${esc(basename(r.video))}">영상</a></span></div>
+${f ? `<p class="why">${f.i + 1}단계 ${esc(verb(f.step))} ${esc(args(f.step))} — ${esc(f.error)}</p>` : ""}
+${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map(({ dir, r }) => `<li><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span>${when(r.startedAt)}</span><span>${fmtMs(r.durationMs)}</span><span class="links"><a href="${esc(dir)}/report.html">리포트</a></span></li>`).join("")}</ol></details>` : ""}
+</li>`;
+  };
+  return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>taperun — ${failed.length ? `실패 ${failed.length}` : "전체 통과"}</title><style>${CSS}</style>
+<div class="wrap">
+<header><h1>taperun</h1><span class="pill ${failed.length ? "fail" : "ok"}">${failed.length ? `FAIL ${failed.length}` : "ALL PASS"}</span></header>
+<p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${runs.length}회</span><span>마지막 ${latest.length ? when(latest[0].r.startedAt) : "-"}</span></p>
+<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
+</div></html>`;
+}
+
+// out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
+export async function buildIndex(outDir) {
+  const dirs = (await readdir(outDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+  const runs = [];
+  for (const dir of dirs) {
+    try {
+      const r = JSON.parse(await readFile(join(outDir, dir, "result.json"), "utf8"));
+      await writeFile(join(outDir, dir, "report.html"), render(r));
+      runs.push({ dir, r });
+    } catch { /* result.json 없는 폴더는 건너뛴다 */ }
+  }
+  const index = join(outDir, "index.html");
+  await writeFile(index, renderIndex(runs));
+  return { index, count: runs.length };
+}
+
 if (process.argv[1] && new URL(import.meta.url).pathname.endsWith(basename(process.argv[1]))) {
-  const file = process.argv[2];
-  if (!file) { console.error("usage: report.mjs result.json"); process.exit(2); }
-  const r = JSON.parse(await readFile(file, "utf8"));
-  const out = join(dirname(file), "report.html");
-  await writeFile(out, render(r));
-  console.log(out);
+  const target = process.argv[2];
+  if (!target) { console.error("usage: report.mjs <result.json | out-dir>"); process.exit(2); }
+  if (target.endsWith(".json")) {
+    const r = JSON.parse(await readFile(target, "utf8"));
+    const out = join(dirname(target), "report.html");
+    await writeFile(out, render(r));
+    console.log(out);
+  } else {
+    const { index, count } = await buildIndex(target);
+    console.log(`${index} (실행 ${count}회)`);
+  }
 }
