@@ -110,7 +110,7 @@ test("a killed newest run makes the scenario ERROR, older pass goes to history",
 
 test("a run still in progress shows RUNNING and is not counted as failure", async () => {
   const out = mkdtempSync(pjoin(td(), "taperun-live-"));
-  mkdirSync(pjoin(out, "browse-old")); writeFileSync(pjoin(out, "browse-old", "result.json"), JSON.stringify({ ...base, name: "browse", ok: true, startedAt: "2026-09-21T10:00:00.000Z", steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
+  mkdirSync(pjoin(out, "browse-old")); writeFileSync(pjoin(out, "browse-old", "result.json"), JSON.stringify({ ...base, name: "browse", ok: true, startedAt: "2026-09-20T10:00:00.000Z", steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
   mkdirSync(pjoin(out, "browse-now")); writeFileSync(pjoin(out, "browse-now", "started.json"), JSON.stringify({ name: "browse", startedAt: new Date().toISOString() }));
   const html = readFileSync((await buildIndex(out)).index, "utf8");
   assert.match(html, /RUNNING 1/, "헤더도 실행 중으로 표시");
