@@ -110,7 +110,12 @@ export async function buildIndex(outDir) {
     try {
       raw = await readFile(join(outDir, dir, "result.json"), "utf8");
     } catch (e) {
-      if (e.code !== "ENOENT") broken.push({ dir, error: String(e.message ?? e) }); // 실행 폴더가 아닌 것만 조용히 건너뛴다
+      if (e.code !== "ENOENT") { broken.push({ dir, error: String(e.message ?? e) }); continue; }
+      // result.json이 없다: 실행 중에 죽은 폴더면 알리고, 그냥 남의 폴더면 건너뛴다
+      try {
+        const m = JSON.parse(await readFile(join(outDir, dir, "started.json"), "utf8"));
+        broken.push({ dir, error: `실행이 끝나지 않았다 (${m.name}, ${m.startedAt} 시작, result.json 없음)` });
+      } catch { /* 실행 폴더가 아니다 */ }
       continue;
     }
     try {

@@ -45,6 +45,8 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
   const startedAt = new Date();
   const outDir = resolve(out, `${safeName(scenario.name)}-${startedAt.toISOString().replace(/[:.]/g, "-")}`);
   await mkdir(outDir, { recursive: true });
+  // 실행 중 표시. 중간에 죽으면 result.json이 없는 채 남고, 목록이 그걸 ERROR로 보여준다
+  await writeFile(join(outDir, "started.json"), JSON.stringify({ name: scenario.name, startedAt: startedAt.toISOString() }));
 
   // 기본은 매번 새 프로필(재현 가능). 카카오/네이버처럼 로그인 세션이 필요한 흐름만 "profile": "shared"로 전용 프로필 사용
   const shared = scenario.profile === "shared";
@@ -101,6 +103,7 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
   };
   await writeFile(join(outDir, "result.json"), JSON.stringify(result, null, 2));
   await writeFile(join(outDir, "report.html"), render(result));
+  await rm(join(outDir, "started.json"), { force: true });
   const out2 = { ...result, report: join(outDir, "report.html") };
   try {
     out2.index = (await buildIndex(resolve(out))).index; // 목록 생성 실패가 실행 결과를 못 덮게

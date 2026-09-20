@@ -82,3 +82,16 @@ test("index links are url-encoded", () => {
   assert.match(html, /href="%ED%86%B5|href="[^"]*%20/, "공백·한글이 인코딩된다");
   assert.doesNotMatch(html, /href="[^"]* [^"]*"/, "href에 날 공백이 없다");
 });
+
+test("a run killed before finishing shows as ERROR, unrelated folders stay skipped", async () => {
+  const out = mkdtempSync(pjoin(td(), "taperun-kill-"));
+  mkdirSync(pjoin(out, "browse-2026")); writeFileSync(pjoin(out, "browse-2026", "started.json"), JSON.stringify({ name: "browse", startedAt: "2026-09-21T01:00:00.000Z" }));
+  mkdirSync(pjoin(out, "ok-1")); writeFileSync(pjoin(out, "ok-1", "result.json"), JSON.stringify({ ...base, name: "ok", ok: true, steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
+  mkdirSync(pjoin(out, "videos-backup"));
+  const res = await buildIndex(out);
+  const html = readFileSync(res.index, "utf8");
+  assert.equal(res.broken, 1);
+  assert.match(html, /실행이 끝나지 않았다 \(browse/);
+  assert.doesNotMatch(html, /ALL PASS/);
+  assert.doesNotMatch(html, /videos-backup/);
+});
