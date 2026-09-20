@@ -34,7 +34,7 @@ details summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-sp
 .back{display:inline-block;color:var(--muted);text-decoration:none;margin-bottom:12px}.back:hover{color:var(--accent)}
 .runs{list-style:none;margin:0;padding:0}.runs li{border-top:1px solid var(--line);padding:12px 0}.runs li:first-child{border-top:0}
 .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.row .name{font-weight:600;font-size:15px}.row .when,.row .nums{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
-.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;letter-spacing:.04em}.tag.ok{background:var(--ok)}.tag.fail{background:var(--fail)}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;letter-spacing:.04em}.tag.ok{background:var(--ok)}.tag.fail{background:var(--fail)}.tag.run{background:var(--muted)}
 .links{margin-left:auto;display:flex;gap:10px}.links a{color:var(--accent);text-decoration:none;font-size:13px}.links a:hover{text-decoration:underline}
 .why{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--fail-bg);border:1px solid var(--fail);font:12.5px/1.5 var(--mono);word-break:break-all}
 .hist{margin-top:8px}.hist summary{cursor:pointer;color:var(--muted);font-size:12px}.hist ol{list-style:none;margin:8px 0 0;padding:0}.hist li{display:flex;gap:10px;align-items:center;padding:4px 0;font-size:12px;color:var(--muted);border:0}
@@ -72,12 +72,12 @@ ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed
 const when = (iso) => iso.replace("T", " ").slice(0, 16);
 const enc = (s) => encodeURIComponent(s);
 
-// runs: [{ dir, r }], broken: [{ dir, name?, startedAt?, error }]
+// runs: [{ dir, r }], broken: [{ dir, name?, startedAt?, error, running? }]
 // 둘을 한 목록으로 합쳐 시나리오별로 묶고, 각 시나리오의 최신 실행을 위에 둔다
 export function renderIndex(runs, broken = []) {
   const items = [
     ...runs.map(({ dir, r }) => ({ dir, name: r.name, at: r.startedAt, r })),
-    ...broken.map((b) => ({ dir: b.dir, name: b.name ?? b.dir, at: b.startedAt ?? "", error: b.error })),
+    ...broken.map((b) => ({ dir: b.dir, name: b.name ?? b.dir, at: b.startedAt ?? "", error: b.error, running: b.running })),
   ].sort((a, b) => (a.at < b.at ? 1 : -1));
 
   const byName = new Map();
@@ -86,9 +86,9 @@ export function renderIndex(runs, broken = []) {
     byName.get(x.name).push(x);
   }
   const latest = [...byName.values()].map((v) => v[0]);
-  const bad = latest.filter((x) => x.error || !x.r.ok).length;
+  const bad = latest.filter((x) => (x.error && !x.running) || (x.r && !x.r.ok)).length; // 실행 중은 실패로 안 센다
 
-  const tag = (x) => (x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
+  const tag = (x) => (x.running ? '<span class="tag run">RUNNING</span>' : x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
   const li = (x, history) => {
     const f = x.r?.steps.find((s) => !s.ok);
     const total = x.r ? x.r.steps.length + x.r.skipped : 0;
@@ -113,6 +113,9 @@ ${history.length ? `<details class="hist"><summary>이전 실행 ${history.lengt
 }
 
 // out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
+// ponytail: 마커가 이 시간보다 오래되면 죽은 실행으로 본다. 단계 타임아웃이 10초라 넉넉하다
+const STALE_MS = 10 * 60 * 1000;
+
 export async function buildIndex(outDir) {
   const dirs = (await readdir(outDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
   const runs = [], broken = [];
@@ -125,7 +128,8 @@ export async function buildIndex(outDir) {
       // result.json이 없다: 실행 중에 죽은 폴더면 알리고, 그냥 남의 폴더면 건너뛴다
       try {
         const m = JSON.parse(await readFile(join(outDir, dir, "started.json"), "utf8"));
-        broken.push({ dir, name: m.name, startedAt: m.startedAt, error: "실행이 끝나지 않았다 (result.json 없음)" });
+        const running = Date.now() - Date.parse(m.startedAt) < STALE_MS;
+        broken.push({ dir, name: m.name, startedAt: m.startedAt, running, error: running ? "아직 실행 중" : "실행이 끝나지 않았다 (result.json 없음)" });
       } catch { /* 실행 폴더가 아니다 */ }
       continue;
     }

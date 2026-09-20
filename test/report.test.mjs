@@ -85,7 +85,7 @@ test("index links are url-encoded", () => {
 
 test("a run killed before finishing shows as ERROR, unrelated folders stay skipped", async () => {
   const out = mkdtempSync(pjoin(td(), "taperun-kill-"));
-  mkdirSync(pjoin(out, "browse-2026")); writeFileSync(pjoin(out, "browse-2026", "started.json"), JSON.stringify({ name: "browse", startedAt: "2026-09-21T01:00:00.000Z" }));
+  mkdirSync(pjoin(out, "browse-2026")); writeFileSync(pjoin(out, "browse-2026", "started.json"), JSON.stringify({ name: "browse", startedAt: "2026-09-01T01:00:00.000Z" }));
   mkdirSync(pjoin(out, "ok-1")); writeFileSync(pjoin(out, "ok-1", "result.json"), JSON.stringify({ ...base, name: "ok", ok: true, steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
   mkdirSync(pjoin(out, "videos-backup"));
   const res = await buildIndex(out);
@@ -106,4 +106,14 @@ test("a killed newest run makes the scenario ERROR, older pass goes to history",
   assert.match(html, /FAIL 1/);
   assert.match(html, /이전 실행 1회/, "예전 PASS는 히스토리로 내려간다");
   assert.ok(html.indexOf("ERROR") < html.indexOf("이전 실행"), "ERROR가 최신 줄");
+});
+
+test("a run still in progress shows RUNNING and is not counted as failure", async () => {
+  const out = mkdtempSync(pjoin(td(), "taperun-live-"));
+  mkdirSync(pjoin(out, "browse-old")); writeFileSync(pjoin(out, "browse-old", "result.json"), JSON.stringify({ ...base, name: "browse", ok: true, startedAt: "2026-09-21T10:00:00.000Z", steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] }));
+  mkdirSync(pjoin(out, "browse-now")); writeFileSync(pjoin(out, "browse-now", "started.json"), JSON.stringify({ name: "browse", startedAt: new Date().toISOString() }));
+  const html = readFileSync((await buildIndex(out)).index, "utf8");
+  assert.match(html, /RUNNING/);
+  assert.match(html, /ALL PASS/, "실행 중은 실패로 세지 않는다");
+  assert.doesNotMatch(html, /실행이 끝나지 않았다/);
 });
