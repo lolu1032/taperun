@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// result.json → report.html (같은 폴더에 씀. 영상·스크린샷은 상대경로)
-// usage: node report.mjs result.json
-import { readFile, writeFile } from "node:fs/promises";
+// result.json → report.html, 또는 out 폴더 → index.html(시나리오별 최신 + 히스토리)
+// usage: node report.mjs <result.json | out-dir>
+import { readFile, readdir, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -15,7 +15,7 @@ const CSS = `
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.55 -apple-system,"Pretendard",system-ui,sans-serif}
 .wrap{max-width:1040px;margin:0 auto;padding:32px 20px 64px}
 header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}h1{font-size:24px;margin:0;letter-spacing:-.01em}
-.pill{font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.ok{background:var(--ok)}.pill.fail{background:var(--fail)}
+.pill{font-weight:700;font-size:13px;padding:4px 12px;border-radius:999px;color:#fff;letter-spacing:.04em}.pill.ok{background:var(--ok)}.pill.fail{background:var(--fail)}.pill.run{background:var(--muted)}
 .meta{color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin:0 0 24px}.meta span::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--line);margin-right:8px;vertical-align:middle}
 .grid{display:grid;grid-template-columns:1fr;gap:20px}@media(min-width:820px){.grid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
@@ -31,6 +31,13 @@ pre{margin:0;font:12.5px/1.5 var(--mono);white-space:pre-wrap;word-break:break-a
 details summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:12px}
 .stat{display:flex;gap:18px;margin-bottom:14px}.stat b{display:block;font-size:22px;letter-spacing:-.02em}.stat small{color:var(--muted)}
 .bar{height:6px;border-radius:999px;background:var(--line);overflow:hidden;display:flex}.bar i{display:block;height:100%}.bar .ok{background:var(--ok)}.bar .fail{background:var(--fail)}
+.back{display:inline-block;color:var(--muted);text-decoration:none;margin-bottom:12px}.back:hover{color:var(--accent)}
+.runs{list-style:none;margin:0;padding:0}.runs li{border-top:1px solid var(--line);padding:12px 0}.runs li:first-child{border-top:0}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.row .name{font-weight:600;font-size:15px}.row .when,.row .nums{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+.tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;color:#fff;letter-spacing:.04em}.tag.ok{background:var(--ok)}.tag.fail{background:var(--fail)}.tag.run{background:var(--muted)}
+.links{margin-left:auto;display:flex;gap:10px}.links a{color:var(--accent);text-decoration:none;font-size:13px}.links a:hover{text-decoration:underline}
+.why{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--fail-bg);border:1px solid var(--fail);font:12.5px/1.5 var(--mono);word-break:break-all}
+.hist{margin-top:8px}.hist summary{cursor:pointer;color:var(--muted);font-size:12px}.hist ol{list-style:none;margin:8px 0 0;padding:0}.hist li{display:flex;gap:10px;align-items:center;padding:4px 0;font-size:12px;color:var(--muted);border:0}
 `;
 
 export function render(r) {
@@ -45,6 +52,7 @@ export function render(r) {
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(r.name)} — ${r.ok ? "PASS" : "FAIL"}</title><style>${CSS}</style>
 <div class="wrap">
+<a class="back" href="../index.html">← 전체</a>
 <header><h1>${esc(r.name)}</h1><span class="pill ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span></header>
 <p class="meta"><span>${esc(r.startedAt.replace("T", " ").slice(0, 19))}</span><span>${fmtMs(r.durationMs)}</span><span>${passed}/${total} 단계${r.skipped ? ` · ${r.skipped} 건너뜀` : ""}</span></p>
 <div class="grid">
@@ -61,11 +69,95 @@ ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed
 </div></html>`;
 }
 
+const when = (iso) => iso.replace("T", " ").slice(0, 16);
+const enc = (s) => encodeURIComponent(s);
+
+// runs: [{ dir, r }], broken: [{ dir, name?, startedAt?, error, running? }]
+// 둘을 한 목록으로 합쳐 시나리오별로 묶고, 각 시나리오의 최신 실행을 위에 둔다
+export function renderIndex(runs, broken = []) {
+  const items = [
+    ...runs.map(({ dir, r }) => ({ dir, name: r.name, at: r.startedAt, r })),
+    ...broken.map((b) => ({ dir: b.dir, name: b.name ?? b.dir, at: b.startedAt ?? "", error: b.error, running: b.running })),
+  ].sort((a, b) => (a.at < b.at ? 1 : -1));
+
+  const byName = new Map();
+  for (const x of items) {
+    if (!byName.has(x.name)) byName.set(x.name, []);
+    byName.get(x.name).push(x);
+  }
+  const latest = [...byName.values()].map((v) => v[0]);
+  const bad = latest.filter((x) => (x.error && !x.running) || (x.r && !x.r.ok)).length; // 실행 중은 실패로 안 센다
+  const running = latest.filter((x) => x.running).length;
+  const badge = bad ? { cls: "fail", text: `FAIL ${bad}` } : running ? { cls: "run", text: `RUNNING ${running}` } : { cls: "ok", text: "ALL PASS" };
+
+  const tag = (x) => (x.running ? '<span class="tag run">RUNNING</span>' : x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
+  const li = (x, history) => {
+    const f = x.r?.steps.find((s) => !s.ok);
+    const total = x.r ? x.r.steps.length + x.r.skipped : 0;
+    return `<li>
+<div class="row">${tag(x)}<span class="name">${esc(x.name)}</span>
+<span class="when">${x.at ? when(x.at) : "읽지 못함"}</span>
+${x.r ? `<span class="nums">${x.r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(x.r.durationMs)}</span>
+<span class="links"><a href="${esc(enc(x.dir))}/report.html">리포트</a><a href="${esc(enc(x.dir))}/${esc(enc(basename(x.r.video)))}">영상</a></span>` : `<span class="nums">${esc(x.dir)}</span>`}</div>
+${x.error ? `<p class="why">${esc(x.error)}</p>` : ""}
+${f ? `<p class="why">${f.i + 1}단계 ${esc(verb(f.step))} ${esc(args(f.step))} — ${esc(f.error)}</p>` : ""}
+${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map((h) => `<li>${tag(h)}<span>${h.at ? when(h.at) : "-"}</span><span>${h.r ? fmtMs(h.r.durationMs) : esc(h.dir)}</span>${h.r ? `<span class="links"><a href="${esc(enc(h.dir))}/report.html">리포트</a></span>` : ""}</li>`).join("")}</ol></details>` : ""}
+</li>`;
+  };
+
+  return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>taperun — ${bad ? `실패 ${bad}` : running ? `실행 중 ${running}` : "전체 통과"}</title><style>${CSS}</style>
+<div class="wrap">
+<header><h1>taperun</h1><span class="pill ${badge.cls}">${badge.text}</span></header>
+<p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${items.length}회</span><span>마지막 ${latest.length && latest[0].at ? when(latest[0].at) : "-"}</span></p>
+<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
+</div></html>`;
+}
+
+// out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
+// ponytail: 마커가 이 시간보다 오래되면 죽은 실행으로 본다. 단계 타임아웃이 10초라 넉넉하다
+const STALE_MS = 10 * 60 * 1000;
+
+export async function buildIndex(outDir) {
+  const dirs = (await readdir(outDir, { withFileTypes: true })).filter((d) => d.isDirectory()).map((d) => d.name);
+  const runs = [], broken = [];
+  for (const dir of dirs) {
+    let raw;
+    try {
+      raw = await readFile(join(outDir, dir, "result.json"), "utf8");
+    } catch (e) {
+      if (e.code !== "ENOENT") { broken.push({ dir, error: String(e.message ?? e) }); continue; }
+      // result.json이 없다: 실행 중에 죽은 폴더면 알리고, 그냥 남의 폴더면 건너뛴다
+      try {
+        const m = JSON.parse(await readFile(join(outDir, dir, "started.json"), "utf8"));
+        const running = Date.now() - Date.parse(m.startedAt) < STALE_MS;
+        broken.push({ dir, name: m.name, startedAt: m.startedAt, running, error: running ? "아직 실행 중" : "실행이 끝나지 않았다 (result.json 없음)" });
+      } catch { /* 실행 폴더가 아니다 */ }
+      continue;
+    }
+    try {
+      const r = JSON.parse(raw);
+      await writeFile(join(outDir, dir, "report.html"), render(r));
+      runs.push({ dir, r });
+    } catch (e) {
+      broken.push({ dir, error: String(e.message ?? e) }); // 깨진 결과를 index에서 숨기지 않는다
+    }
+  }
+  const index = join(outDir, "index.html");
+  await writeFile(index, renderIndex(runs, broken));
+  return { index, count: runs.length, broken: broken.length };
+}
+
 if (process.argv[1] && new URL(import.meta.url).pathname.endsWith(basename(process.argv[1]))) {
-  const file = process.argv[2];
-  if (!file) { console.error("usage: report.mjs result.json"); process.exit(2); }
-  const r = JSON.parse(await readFile(file, "utf8"));
-  const out = join(dirname(file), "report.html");
-  await writeFile(out, render(r));
-  console.log(out);
+  const target = process.argv[2];
+  if (!target) { console.error("usage: report.mjs <result.json | out-dir>"); process.exit(2); }
+  if (target.endsWith(".json")) {
+    const r = JSON.parse(await readFile(target, "utf8"));
+    const out = join(dirname(target), "report.html");
+    await writeFile(out, render(r));
+    console.log(out);
+  } else {
+    const { index, count } = await buildIndex(target);
+    console.log(`${index} (실행 ${count}회)`);
+  }
 }

@@ -65,14 +65,21 @@ node <skill>/scripts/run.mjs <repo>/.taperun/scenarios/<name>.json --out <repo>/
 - 기본은 헤드리스. 사용자가 보고 싶다고 하면 `--headed`
 - 매번 새 프로필(쿠키 없음). `profile: shared`일 때만 전용 프로필
 - 입력은 CDP로 페이지 안에 주입된다. OS 마우스·키보드를 쓰는 도구(AppleScript, cliclick, computer-use)는 쓰지 않는다
-- exit 0 = PASS, 1 = FAIL. 결과는 `<out>/<name>-<time>/result.json`, `video.webm`, 실패 시 `fail-step-N.png`
+- exit 0 = PASS, 1 = FAIL. 결과는 `<out>/<name>-<time>/`에 `result.json`, `video.webm`, `report.html`, 실패 시 `fail-step-N.png`
+- 실행이 끝나면 `report.html`과 `<out>/index.html`이 자동으로 갱신된다. 리포트 명령을 따로 돌릴 필요 없다
 
 ## 4. 보고
 
+실행이 끝나면 리포트는 이미 만들어져 있다. 열기만 한다:
+
 ```bash
-node <skill>/scripts/report.mjs <out>/<name>-<time>/result.json   # 같은 폴더에 report.html
-open <out>/<name>-<time>/report.html                                # macOS
+open <out>/<name>-<time>/report.html   # 이번 실행 상세 (macOS)
+open <out>/index.html                  # 시나리오별 최신 상태 한 화면
 ```
+
+시나리오가 여러 개면 `index.html`을 먼저 준다. 시나리오별 최신 실행이 한 줄씩, 실패한 줄은 실패 단계와 에러가 그 자리에 보이고, 같은 시나리오의 이전 실행은 접혀 있다.
+
+예전 실행 폴더만 있고 리포트가 없을 때만 다시 만든다: `node <skill>/scripts/report.mjs <out>` (폴더를 주면 전부 다시 만들고 index도 갱신)
 
 판정은 `result.json`의 `ok`다. 스크린샷이 괜찮아 보여도 `ok: false`면 FAIL이다.
 
