@@ -72,32 +72,43 @@ ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed
 const when = (iso) => iso.replace("T", " ").slice(0, 16);
 const enc = (s) => encodeURIComponent(s);
 
-// runs: [{ dir, r }] — 시나리오별로 묶어 최신 실행을 위에, 나머지는 접어서
+// runs: [{ dir, r }], broken: [{ dir, name?, startedAt?, error }]
+// 둘을 한 목록으로 합쳐 시나리오별로 묶고, 각 시나리오의 최신 실행을 위에 둔다
 export function renderIndex(runs, broken = []) {
+  const items = [
+    ...runs.map(({ dir, r }) => ({ dir, name: r.name, at: r.startedAt, r })),
+    ...broken.map((b) => ({ dir: b.dir, name: b.name ?? b.dir, at: b.startedAt ?? "", error: b.error })),
+  ].sort((a, b) => (a.at < b.at ? 1 : -1));
+
   const byName = new Map();
-  for (const x of [...runs].sort((a, b) => (a.r.startedAt < b.r.startedAt ? 1 : -1))) {
-    if (!byName.has(x.r.name)) byName.set(x.r.name, []);
-    byName.get(x.r.name).push(x);
+  for (const x of items) {
+    if (!byName.has(x.name)) byName.set(x.name, []);
+    byName.get(x.name).push(x);
   }
   const latest = [...byName.values()].map((v) => v[0]);
-  const failed = latest.filter((x) => !x.r.ok);
-  const li = ({ dir, r }, history) => {
-    const f = r.steps.find((s) => !s.ok);
-    const total = r.steps.length + r.skipped;
+  const bad = latest.filter((x) => x.error || !x.r.ok).length;
+
+  const tag = (x) => (x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
+  const li = (x, history) => {
+    const f = x.r?.steps.find((s) => !s.ok);
+    const total = x.r ? x.r.steps.length + x.r.skipped : 0;
     return `<li>
-<div class="row"><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span class="name">${esc(r.name)}</span>
-<span class="when">${when(r.startedAt)}</span><span class="nums">${r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(r.durationMs)}</span>
-<span class="links"><a href="${esc(enc(dir))}/report.html">리포트</a><a href="${esc(enc(dir))}/${esc(enc(basename(r.video)))}">영상</a></span></div>
+<div class="row">${tag(x)}<span class="name">${esc(x.name)}</span>
+<span class="when">${x.at ? when(x.at) : "읽지 못함"}</span>
+${x.r ? `<span class="nums">${x.r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(x.r.durationMs)}</span>
+<span class="links"><a href="${esc(enc(x.dir))}/report.html">리포트</a><a href="${esc(enc(x.dir))}/${esc(enc(basename(x.r.video)))}">영상</a></span>` : `<span class="nums">${esc(x.dir)}</span>`}</div>
+${x.error ? `<p class="why">${esc(x.error)}</p>` : ""}
 ${f ? `<p class="why">${f.i + 1}단계 ${esc(verb(f.step))} ${esc(args(f.step))} — ${esc(f.error)}</p>` : ""}
-${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map(({ dir, r }) => `<li><span class="tag ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span><span>${when(r.startedAt)}</span><span>${fmtMs(r.durationMs)}</span><span class="links"><a href="${esc(enc(dir))}/report.html">리포트</a></span></li>`).join("")}</ol></details>` : ""}
+${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map((h) => `<li>${tag(h)}<span>${h.at ? when(h.at) : "-"}</span><span>${h.r ? fmtMs(h.r.durationMs) : esc(h.dir)}</span>${h.r ? `<span class="links"><a href="${esc(enc(h.dir))}/report.html">리포트</a></span>` : ""}</li>`).join("")}</ol></details>` : ""}
 </li>`;
   };
+
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>taperun — ${failed.length || broken.length ? `실패 ${failed.length + broken.length}` : "전체 통과"}</title><style>${CSS}</style>
+<title>taperun — ${bad ? `실패 ${bad}` : "전체 통과"}</title><style>${CSS}</style>
 <div class="wrap">
-<header><h1>taperun</h1><span class="pill ${failed.length || broken.length ? "fail" : "ok"}">${failed.length || broken.length ? `FAIL ${failed.length + broken.length}` : "ALL PASS"}</span></header>
-<p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${runs.length}회</span><span>마지막 ${latest.length ? when(latest[0].r.startedAt) : "-"}</span></p>
-<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}${broken.map(({ dir, error }) => `<li><div class="row"><span class="tag fail">ERROR</span><span class="name">${esc(dir)}</span><span class="when">읽지 못함</span></div><p class="why">${esc(error)}</p></li>`).join("")}</ol></div>
+<header><h1>taperun</h1><span class="pill ${bad ? "fail" : "ok"}">${bad ? `FAIL ${bad}` : "ALL PASS"}</span></header>
+<p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${items.length}회</span><span>마지막 ${latest.length && latest[0].at ? when(latest[0].at) : "-"}</span></p>
+<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
 </div></html>`;
 }
 
@@ -114,7 +125,7 @@ export async function buildIndex(outDir) {
       // result.json이 없다: 실행 중에 죽은 폴더면 알리고, 그냥 남의 폴더면 건너뛴다
       try {
         const m = JSON.parse(await readFile(join(outDir, dir, "started.json"), "utf8"));
-        broken.push({ dir, error: `실행이 끝나지 않았다 (${m.name}, ${m.startedAt} 시작, result.json 없음)` });
+        broken.push({ dir, name: m.name, startedAt: m.startedAt, error: "실행이 끝나지 않았다 (result.json 없음)" });
       } catch { /* 실행 폴더가 아니다 */ }
       continue;
     }

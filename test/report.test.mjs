@@ -91,7 +91,19 @@ test("a run killed before finishing shows as ERROR, unrelated folders stay skipp
   const res = await buildIndex(out);
   const html = readFileSync(res.index, "utf8");
   assert.equal(res.broken, 1);
-  assert.match(html, /실행이 끝나지 않았다 \(browse/);
+  assert.match(html, /실행이 끝나지 않았다/);
   assert.doesNotMatch(html, /ALL PASS/);
   assert.doesNotMatch(html, /videos-backup/);
+});
+
+test("a killed newest run makes the scenario ERROR, older pass goes to history", () => {
+  const html = renderIndex(
+    [{ dir: "browse-15", r: { ...base, name: "browse", ok: true, startedAt: "2026-09-21T15:00:00.000Z", steps: [{ i: 0, step: { goto: "/" }, ok: true, ms: 5 }] } }],
+    [{ dir: "browse-16", name: "browse", startedAt: "2026-09-21T16:00:00.000Z", error: "실행이 끝나지 않았다 (result.json 없음)" }],
+  );
+  assert.match(html, /시나리오 1개/, "같은 시나리오로 묶인다");
+  assert.doesNotMatch(html, /ALL PASS/);
+  assert.match(html, /FAIL 1/);
+  assert.match(html, /이전 실행 1회/, "예전 PASS는 히스토리로 내려간다");
+  assert.ok(html.indexOf("ERROR") < html.indexOf("이전 실행"), "ERROR가 최신 줄");
 });
