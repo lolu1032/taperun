@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // scenario.json → 크롬(전용 프로필)에서 실행 + 녹화 → result.json
 // usage: node run.mjs scenario.json [--out DIR] [--headed]
-import { chromium } from "playwright";
-import { mkdir, mkdtemp, rm, writeFile, rename } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { chromium, webkit, firefox } from "playwright";
+import { mkdir, mkdtemp, rm, writeFile, rename, readFile } from "node:fs/promises";
+import { join, resolve, dirname } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { render, buildIndex } from "./report.mjs";
 
 const PROFILE = join(homedir(), ".taperun", "chrome");
+// 엔진. 기본은 설치된 크롬(따로 받지 않는다).
+// webkit 은 **맥 Tauri 앱의 WKWebView 와 같은 계열**이라, 데스크톱 앱의 화면을 그
+// 엔진으로 검증할 때 쓴다(vite dev 서버를 연다 — 네이티브 셸은 범위 밖).
+// chromium 외에는 `channel` 을 주지 않는다 — 그 옵션은 크롬 계열 전용이다.
+const ENGINES = { chromium, webkit, firefox };
 const STEP_TIMEOUT = 10_000;
 const STEP_PAUSE = 300;   // 영상에서 단계 사이가 보이게
 const END_PAUSE = 1000;   // 마지막 화면이 영상에 담기게 (즉시 close하면 끝 프레임이 잘림)
@@ -41,7 +46,20 @@ async function glide(page, selector) {
   cur = to;
 }
 
-export async function run(scenario, { out = ".taperun/out", headed = false } = {}) {
+// 엔진이 안 받아져 있으면 playwright 가 "Executable doesn't exist" 를 던진다.
+// 그 메시지만으로는 뭘 해야 하는지 안 보여서 받는 명령으로 바꿔 준다.
+async function launch(engine, name, profile, opts) {
+  try {
+    return await engine.launchPersistentContext(profile, opts);
+  } catch (e) {
+    if (/Executable doesn't exist|please run the following command/i.test(String(e.message ?? e))) {
+      throw new Error(`${name} 엔진이 없다 — 스킬 폴더에서 \`npx playwright install ${name}\` 한 번 받는다`);
+    }
+    throw e;
+  }
+}
+
+export async function run(scenario, { out = ".taperun/out", headed = false, baseDir = process.cwd() } = {}) {
   const startedAt = new Date();
   const outDir = resolve(out, `${safeName(scenario.name)}-${startedAt.toISOString().replace(/[:.]/g, "-")}`);
   await mkdir(outDir, { recursive: true });
@@ -51,16 +69,24 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
   // 기본은 매번 새 프로필(재현 가능). 카카오/네이버처럼 로그인 세션이 필요한 흐름만 "profile": "shared"로 전용 프로필 사용
   const shared = scenario.profile === "shared";
   const profile = shared ? PROFILE : await mkdtemp(join(tmpdir(), "taperun-"));
-  const ctx = await chromium.launchPersistentContext(profile, {
-    channel: "chrome",
+  const name = scenario.engine ?? "chromium";
+  const engine = ENGINES[name];
+  if (!engine) throw new Error(`모르는 engine: ${name} (chromium | webkit | firefox)`);
+  const ctx = await launch(engine, name, profile, {
+    ...(name === "chromium" ? { channel: "chrome" } : {}),
     headless: !headed,
     baseURL: scenario.baseURL,
     viewport: { width: 1280, height: 800 },
-    args: ["--window-size=1280,800"],
+    ...(name === "chromium" ? { args: ["--window-size=1280,800"] } : {}),
     recordVideo: { dir: outDir, size: { width: 1280, height: 800 } },
   });
   ctx.setDefaultTimeout(STEP_TIMEOUT);
   await ctx.addInitScript(CURSOR_SCRIPT);
+  // 페이지가 뜨기 전에 넣을 것. Tauri 앱처럼 웹뷰가 심어 주는 전역이 없으면
+  // 첫 줄에서 죽는 화면을 열 때 쓴다 (stubs/tauri.js). 경로는 시나리오 파일 기준.
+  if (scenario.initScript) {
+    await ctx.addInitScript(await readFile(resolve(baseDir, scenario.initScript), "utf8"));
+  }
   const page = ctx.pages()[0] ?? (await ctx.newPage());
 
   const console_ = [];
@@ -114,17 +140,21 @@ export async function run(scenario, { out = ".taperun/out", headed = false } = {
 }
 
 // 단계 어휘: goto / click / fill / expect — emit-test.mjs와 공유
+// `"timeout": ms` 를 단계에 붙이면 그 단계만 더 기다린다. 기본 10초로는 못 재는 것
+// (AI 생성·렌더처럼 분 단위로 끝나는 작업)이 있어서 열어 둔다. 남용하면 실패가 늦게
+// 드러나니, 그 단계가 실제로 오래 걸릴 때만 붙인다.
 async function runStep(page, step) {
-  if (step.goto != null) return page.goto(step.goto);
-  if (step.click != null) { await glide(page, step.click); return page.click(step.click); }
-  if (step.fill != null) { await glide(page, step.fill[0]); return page.fill(step.fill[0], step.fill[1]); }
+  const timeout = step.timeout ?? STEP_TIMEOUT;
+  if (step.goto != null) return page.goto(step.goto, { timeout });
+  if (step.click != null) { await glide(page, step.click); return page.click(step.click, { timeout }); }
+  if (step.fill != null) { await glide(page, step.fill[0]); return page.fill(step.fill[0], step.fill[1], { timeout }); }
   if (step.expect != null) {
     const { url, text, visible } = step.expect;
     if (url != null) {
-      await page.waitForURL((u) => (url.startsWith("/") ? u.pathname === url : u.href.includes(url)));
+      await page.waitForURL((u) => (url.startsWith("/") ? u.pathname === url : u.href.includes(url)), { timeout });
     }
-    if (text != null) await page.getByText(text).first().waitFor({ state: "visible" });
-    if (visible != null) await page.locator(visible).first().waitFor({ state: "visible" });
+    if (text != null) await page.getByText(text).first().waitFor({ state: "visible", timeout });
+    if (visible != null) await page.locator(visible).first().waitFor({ state: "visible", timeout });
     return;
   }
   throw new Error(`unknown step: ${JSON.stringify(step)}`);
@@ -136,7 +166,11 @@ if (process.argv[1] && resolve(process.argv[1]) === new URL(import.meta.url).pat
   const { readFile } = await import("node:fs/promises");
   const scenario = JSON.parse(await readFile(file, "utf8"));
   const outIdx = flags.indexOf("--out");
-  const r = await run(scenario, { out: outIdx >= 0 ? flags[outIdx + 1] : undefined, headed: flags.includes("--headed") });
+  const r = await run(scenario, {
+    out: outIdx >= 0 ? flags[outIdx + 1] : undefined,
+    headed: flags.includes("--headed"),
+    baseDir: dirname(resolve(file)),   // initScript 는 시나리오 옆에 둔다
+  });
   console.log(JSON.stringify({ ok: r.ok, report: r.report, index: r.index ?? null, indexError: r.indexError ?? null, video: r.video, failed: r.steps.find((s) => !s.ok) ?? null }, null, 2));
   process.exit(r.ok ? 0 : 1);
 }
