@@ -7,20 +7,32 @@ import { basename } from "node:path";
 const q = JSON.stringify;
 const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+const STEP_DEFAULT = 10_000;
+// 단계에 "timeout" 이 붙어 있으면 그 단계만 옵션으로 넘긴다. 없으면 적지 않는다
+// (기본 10초는 파일 위의 configure/actionTimeout 이 준다).
+const opt = (step) => (step.timeout ? `, { timeout: ${step.timeout} }` : "");
+
+/** 테스트 하나가 쓸 수 있는 시간. 단계 예산의 합보다 작으면 **테스트가 먼저 죽는다**
+ *  — Playwright 기본은 30초라, 분 단위 단계가 하나만 있어도 그 한도에 걸린다. */
+function budget(steps) {
+  return steps.reduce((n, s) => n + (s.timeout ?? STEP_DEFAULT), 0) + 30_000;
+}
+
 function lines(step) {
-  if (step.goto != null) return [`await page.goto(${q(step.goto)});`];
-  if (step.click != null) return [`await page.click(${q(step.click)});`];
-  if (step.fill != null) return [`await page.fill(${q(step.fill[0])}, ${q(step.fill[1])});`];
-  if (step.select != null) return [`await page.selectOption(${q(step.select[0])}, ${q(step.select[1])});`];
+  const o = opt(step);
+  if (step.goto != null) return [`await page.goto(${q(step.goto)}${o});`];
+  if (step.click != null) return [`await page.click(${q(step.click)}${o});`];
+  if (step.fill != null) return [`await page.fill(${q(step.fill[0])}, ${q(step.fill[1])}${o});`];
+  if (step.select != null) return [`await page.selectOption(${q(step.select[0])}, ${q(step.select[1])}${o});`];
   if (step.expect != null) {
     const { url, text, visible } = step.expect;
     const out = [];
     if (url != null) {
       const src = url.startsWith("/") ? `^[a-z]+://[^/]+${reEsc(url)}([?#]|$)` : reEsc(url);
-      out.push(`await expect(page).toHaveURL(new RegExp(${q(src)}));`);
+      out.push(`await expect(page).toHaveURL(new RegExp(${q(src)})${o});`);
     }
-    if (text != null) out.push(`await expect(page.getByText(${q(text)}).first()).toBeVisible();`);
-    if (visible != null) out.push(`await expect(page.locator(${q(visible)}).first()).toBeVisible();`);
+    if (text != null) out.push(`await expect(page.getByText(${q(text)}).first()).toBeVisible(${o ? o.slice(2) : ""});`);
+    if (visible != null) out.push(`await expect(page.locator(${q(visible)}).first()).toBeVisible(${o ? o.slice(2) : ""});`);
     return out;
   }
   throw new Error(`unknown step: ${q(step)}`);
@@ -34,6 +46,7 @@ const expect = baseExpect.configure({ timeout: 10_000 });
 test.use({ baseURL: ${q(s.baseURL)}, actionTimeout: 10_000 });
 
 test(${q(s.name)}, async ({ page }) => {
+  test.setTimeout(${budget(s.steps)});
 ${s.steps.flatMap(lines).map((l) => `  ${l}`).join("\n")}
 });
 `;
