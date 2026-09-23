@@ -11,6 +11,7 @@ function lines(step) {
   if (step.goto != null) return [`await page.goto(${q(step.goto)});`];
   if (step.click != null) return [`await page.click(${q(step.click)});`];
   if (step.fill != null) return [`await page.fill(${q(step.fill[0])}, ${q(step.fill[1])});`];
+  if (step.select != null) return [`await page.selectOption(${q(step.select[0])}, ${q(step.select[1])});`];
   if (step.expect != null) {
     const { url, text, visible } = step.expect;
     const out = [];

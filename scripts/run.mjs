@@ -148,6 +148,8 @@ async function runStep(page, step) {
   if (step.goto != null) return page.goto(step.goto, { timeout });
   if (step.click != null) { await glide(page, step.click); return page.click(step.click, { timeout }); }
   if (step.fill != null) { await glide(page, step.fill[0]); return page.fill(step.fill[0], step.fill[1], { timeout }); }
+  // <select> 는 fill 로 안 바뀌고, 헤드리스에서 option 클릭도 안 먹는다. 값(value)으로 고른다.
+  if (step.select != null) { await glide(page, step.select[0]); return page.selectOption(step.select[0], step.select[1], { timeout }); }
   if (step.expect != null) {
     const { url, text, visible } = step.expect;
     if (url != null) {
