@@ -1,6 +1,6 @@
 ---
 name: taperun
-description: 웹 앱의 한 기능을 E2E로 실제 크롬에서 돌려보고, 영상으로 찍고, 성공/실패와 실패 원인을 HTML 리포트로 만든다. 레포에서 기능을 파악 → 시나리오(scenario.json) 작성 → 녹화하며 실행(가상 커서 포함, 사용자 마우스·키보드 포커스를 뺏지 않음) → report.html → 원하면 Playwright 테스트코드(*.spec.ts)로 변환. 통과 판정은 LLM이 아니라 시나리오의 expect 단계가 낸다. Triggers: "OO 기능 e2e 해줘", "로그인 흐름 돌려봐", "이 화면 실제로 되는지 확인해줘", "가입부터 끝까지 테스트해줘", "e2e 영상 찍어줘", "taperun", "e2e test this feature", "run through the signup flow", "record an e2e run". 단위 테스트 작성, 부하 테스트, 모바일 네이티브 앱에는 쓰지 않는다.
+description: 웹 앱이나 데스크톱 앱(Tauri)의 한 기능을 E2E로 실제 브라우저 엔진에서 돌려보고, 영상으로 찍고, 성공/실패와 실패 원인을 HTML 리포트로 만든다. 레포에서 기능을 파악 → 시나리오(scenario.json) 작성 → 녹화하며 실행(가상 커서 포함, 사용자 마우스·키보드 포커스를 뺏지 않음) → report.html → 원하면 Playwright 테스트코드(*.spec.ts)로 변환. 통과 판정은 LLM이 아니라 시나리오의 expect 단계가 낸다. Triggers: "OO 기능 e2e 해줘", "로그인 흐름 돌려봐", "이 화면 실제로 되는지 확인해줘", "가입부터 끝까지 테스트해줘", "e2e 영상 찍어줘", "taperun", "데스크톱 앱 e2e", "타우리 앱 화면 확인해줘", "e2e test this feature", "run through the signup flow", "record an e2e run". 데스크톱은 앱의 dev 서버(웹뷰 화면)를 같은 계열 엔진으로 여는 것까지다 — 네이티브 셸 설치·딥링크·파일/DB 같은 실기기 동작, 단위 테스트, 부하 테스트, 모바일 네이티브 앱에는 쓰지 않는다.
 ---
 
 # taperun
@@ -49,6 +49,13 @@ description: 웹 앱의 한 기능을 E2E로 실제 크롬에서 돌려보고, �
 | `fill` | `[셀렉터, 값]` | |
 | `expect` | `{ url?, text?, visible? }` | `url`이 `/`로 시작하면 pathname 일치, 아니면 포함. 10초 대기 |
 
+어느 단계든 `"timeout": <ms>` 를 같은 줄에 붙이면 그 단계만 더 기다린다(기본 10초).
+AI 생성이나 렌더처럼 분 단위로 끝나는 것에만 쓴다 — 아무 데나 붙이면 실패가 늦게 드러난다.
+
+```json
+{ "expect": { "visible": "[aria-label='결과물'] video" }, "timeout": 900000 }
+```
+
 규칙:
 - 셀렉터와 기대 문구는 **소스 코드에서 그대로** 가져온다. 추측하지 않는다
 - 같은 텍스트가 두 곳 이상 있으면(헤더 버튼과 폼 버튼 등) `button[type=submit]`, `[name=...]`, `[placeholder='...']`처럼 구조로 잡는다
@@ -67,6 +74,24 @@ node <skill>/scripts/run.mjs <repo>/.taperun/scenarios/<name>.json --out <repo>/
 - 입력은 CDP로 페이지 안에 주입된다. OS 마우스·키보드를 쓰는 도구(AppleScript, cliclick, computer-use)는 쓰지 않는다
 - exit 0 = PASS, 1 = FAIL. 결과는 `<out>/<name>-<time>/`에 `result.json`, `video.webm`, `report.html`, 실패 시 `fail-step-N.png`
 - 실행이 끝나면 `report.html`과 `<out>/index.html`이 자동으로 갱신된다. 리포트 명령을 따로 돌릴 필요 없다
+
+## 3-1. 데스크톱 앱(Tauri)
+
+네이티브 셸은 열지 않는다. 앱이 띄우는 **웹뷰 화면**을 같은 계열 엔진으로 연다.
+
+```json
+{
+  "engine": "webkit",
+  "baseURL": "http://localhost:5174",
+  "initScript": "../tauri-stub.js"
+}
+```
+
+- `engine`: `chromium`(기본, 설치된 크롬) · `webkit` · `firefox`. **맥 Tauri = WKWebView 라서 `webkit`** 이 그 화면에 가장 가깝다. 윈도우(WebView2)는 `chromium`
+- 처음 한 번 엔진을 받는다: `<skill>`에서 `npx playwright install webkit`. 안 받았으면 실행이 그 명령을 알려 주고 멈춘다
+- **앱의 dev 서버를 띄워서 그 주소를 연다**(`apps/desktop` 의 vite 등). `tauri dev` 로 뜬 네이티브 창에는 붙지 않는다
+- `initScript`: 페이지가 뜨기 전에 넣을 JS. 경로는 **시나리오 파일 기준**. Tauri 앱은 웹뷰가 심어 주는 전역(`__TAURI_INTERNALS__`)이 없으면 첫 줄에서 죽고 빈 화면만 나오므로 `<skill>/stubs/tauri.js` 를 레포로 복사해 쓴다
+- **여기서 보이는 것은 화면과 흐름까지다.** invoke 는 전부 빈 값을 돌려준다 — 앱이 `plugin:http|fetch` 로 네트워크를 하면 서버 데이터가 안 온다. 파일·DB·창 제어·딥링크·다중창·자동업데이트처럼 네이티브가 답해야 하는 것은 **실기기 몫**이다. 그 명령이 필요하면 복사한 스텁에서 그 명령만 앱에 맞게 채운다
 
 ## 4. 보고
 
