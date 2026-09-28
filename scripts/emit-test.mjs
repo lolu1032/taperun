@@ -25,7 +25,7 @@ function lines(step) {
   if (step.fill != null) return [`await page.fill(${q(step.fill[0])}, ${q(step.fill[1])}${o});`];
   if (step.select != null) return [`await page.selectOption(${q(step.select[0])}, ${q(step.select[1])}${o});`];
   if (step.expect != null) {
-    const { url, text, visible } = step.expect;
+    const { url, text, visible, hidden } = step.expect;
     const out = [];
     if (url != null) {
       const src = url.startsWith("/") ? `^[a-z]+://[^/]+${reEsc(url)}([?#]|$)` : reEsc(url);
@@ -33,6 +33,7 @@ function lines(step) {
     }
     if (text != null) out.push(`await expect(page.getByText(${q(text)}).first()).toBeVisible(${o ? o.slice(2) : ""});`);
     if (visible != null) out.push(`await expect(page.locator(${q(visible)}).first()).toBeVisible(${o ? o.slice(2) : ""});`);
+    if (hidden != null) out.push(`await expect(page.locator(${q(hidden)}).first()).toBeHidden(${o ? o.slice(2) : ""});`);
     return out;
   }
   throw new Error(`unknown step: ${q(step)}`);

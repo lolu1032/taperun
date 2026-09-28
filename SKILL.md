@@ -48,7 +48,7 @@ description: 웹 앱이나 데스크톱 앱(Tauri)의 한 기능을 E2E로 실�
 | `click` | Playwright 셀렉터 | 10초 안에 클릭 가능해야 함 |
 | `fill` | `[셀렉터, 값]` | |
 | `select` | `[셀렉터, value]` | `<select>` 전용. `fill` 로는 안 바뀌고 option 클릭도 헤드리스에서 안 먹는다. 보이는 라벨이 아니라 **`value`** 를 준다 |
-| `expect` | `{ url?, text?, visible? }` | `url`이 `/`로 시작하면 pathname 일치, 아니면 포함. 10초 대기 |
+| `expect` | `{ url?, text?, visible?, hidden? }` | `url`이 `/`로 시작하면 pathname 일치, 아니면 포함. `hidden` 은 셀렉터가 **안 보여야** 통과(없어야 맞는 것 확인용 — 앞 단계에서 화면이 떴는지 먼저 `visible` 로 잡아야 헛통과가 안 난다). 10초 대기 |
 
 어느 단계든 `"timeout": <ms>` 를 같은 줄에 붙이면 그 단계만 더 기다린다(기본 10초).
 AI 생성이나 렌더처럼 분 단위로 끝나는 것에만 쓴다 — 아무 데나 붙이면 실패가 늦게 드러난다.
@@ -56,6 +56,8 @@ AI 생성이나 렌더처럼 분 단위로 끝나는 것에만 쓴다 — 아무
 ```json
 { "expect": { "visible": "[aria-label='결과물'] video" }, "timeout": 900000 }
 ```
+
+선택 필드: `"title"`(목록·리포트에 이름 아래 한 줄로 보인다), `"issue": { id, url, title, check, criteria, note }`(상세 리포트의 «이슈» 카드 — 무엇을 확인하려는 실행인지, 판단 기준, 이 시나리오가 못 본 범위를 `note` 에 적는다).
 
 규칙:
 - 셀렉터와 기대 문구는 **소스 코드에서 그대로** 가져온다. 추측하지 않는다
@@ -70,6 +72,7 @@ AI 생성이나 렌더처럼 분 단위로 끝나는 것에만 쓴다 — 아무
 node <skill>/scripts/run.mjs <repo>/.taperun/scenarios/<name>.json --out <repo>/.taperun/out
 ```
 
+- **여러 개는 한 번에 넘긴다**: `run.mjs a.json b.json c.json --out ... [--headed]`. 크롬을 **한 번만** 띄우고 **한 페이지에서 차례로** 돈다 — 새 탭도 열지 않는다(헤디드 크롬은 새 탭이 새 창으로 떠서 macOS 포커스를 뺏는다). 영상은 screencast 로 시나리오마다 따로 남는다. 시나리오 사이에 빈 페이지로 빠진 뒤 쿠키·방문한 origin 의 저장소(localStorage·IndexedDB·sessionStorage 포함)를 지워 새 프로필과 같은 조건을 만든다. webkit/firefox·`profile: shared` 시나리오는 섞여 있어도 그것만 따로 띄운다
 - 기본은 헤드리스. 사용자가 보고 싶다고 하면 `--headed`
 - 매번 새 프로필(쿠키 없음). `profile: shared`일 때만 전용 프로필
 - 입력은 CDP로 페이지 안에 주입된다. OS 마우스·키보드를 쓰는 도구(AppleScript, cliclick, computer-use)는 쓰지 않는다

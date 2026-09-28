@@ -2,14 +2,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import { existsSync, statSync } from "node:fs";
-import { run } from "../scripts/run.mjs";
+import { run, openSession } from "../scripts/run.mjs";
 
 const pages = {
   "/": `<a href="/login">Login</a><img src="/missing.png">`,
   "/login": `<form><input id="email"><button>Sign in</button></form><h1>로그인</h1>`,
+  // 세션 격리 확인용: /set 이 쿠키·localStorage 를 남기고 /check 가 그걸 보여 준다
+  "/set": `<script>localStorage.setItem("ls","1");sessionStorage.setItem("ss","1")</script><p>set</p>`,
+  "/check": `<p id="c"></p><script>document.getElementById("c").textContent = "cookie=" + document.cookie + "|ls=" + localStorage.getItem("ls") + "|ss=" + sessionStorage.getItem("ss")</script>`,
 };
 const server = createServer((req, res) => {
-  res.writeHead(pages[req.url] ? 200 : 404, { "content-type": "text/html; charset=utf-8" });
+  res.writeHead(pages[req.url] ? 200 : 404, { "content-type": "text/html; charset=utf-8", ...(req.url === "/set" ? { "set-cookie": "seen=1; Path=/" } : {}) });
   res.end(pages[req.url] ?? "nope");
 });
 await new Promise((r) => server.listen(0, r));
@@ -64,4 +67,23 @@ test("index failure does not hide the run result", async () => {
   assert.equal(r.ok, true, "실행 결과는 그대로 나온다");
   assert.ok(r.report, "개별 리포트는 만들어진다");
   assert.ok(r.indexError, "목록 실패는 따로 알린다");
+});
+
+test("session: one browser, one page reused (no new tab/window), cookies/storage do not leak, each gets its own video", async () => {
+  const session = await openSession({ out });
+  try {
+    const a = await run({ name: "sess-a", baseURL, steps: [
+      { goto: "/set" }, { goto: "/check" }, { expect: { text: "cookie=seen=1|ls=1|ss=1" } },
+    ]}, { out, session });
+    const b = await run({ name: "sess-b", baseURL, steps: [
+      { goto: "/check" }, { expect: { text: "cookie=|ls=null|ss=null" } },
+    ]}, { out, session });
+    assert.equal(a.ok, true, "첫 시나리오 안에서는 상태가 유지된다");
+    assert.equal(b.ok, true, "다음 시나리오는 깨끗한 상태로 시작한다");
+    assert.equal(session.ctx.pages().length, 1, "새 탭·창을 열지 않는다 — 열면 헤디드에서 포커스를 뺏는다");
+    for (const r of [a, b]) assert.ok(existsSync(r.video) && statSync(r.video).size > 0, `${r.name} video`);
+    assert.notEqual(a.video, b.video);
+  } finally {
+    await session.close();
+  }
 });

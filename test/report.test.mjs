@@ -38,7 +38,7 @@ test("index groups by scenario, newest first, older runs collapsed", () => {
   assert.match(html, /실행 3회/);
   assert.match(html, /FAIL 1/, "실패한 시나리오 수가 제목 배지에");
   assert.match(html, /2단계 click text=더보기 — Timeout/, "실패 이유가 목록에 바로 보인다");
-  assert.match(html, /이전 실행 1회/, "같은 시나리오 과거 실행은 접힌다");
+  assert.match(html, new RegExp(`class="dot ok" href="${encodeURIComponent("browse-2026-09-20T15:00:00.000Z")}/report\\.html"`), "같은 시나리오 과거 실행은 이력 점으로");
   assert.match(html, new RegExp(`href="${encodeURIComponent("browse-2026-09-20T16:00:00.000Z")}/report\\.html"`), "링크는 인코딩된다");
   assert.ok(html.indexOf("browse-2026-09-20T16") < html.indexOf("browse-2026-09-20T15"), "최신이 위");
 });
@@ -104,8 +104,8 @@ test("a killed newest run makes the scenario ERROR, older pass goes to history",
   assert.match(html, /시나리오 1개/, "같은 시나리오로 묶인다");
   assert.doesNotMatch(html, /ALL PASS/);
   assert.match(html, /FAIL 1/);
-  assert.match(html, /이전 실행 1회/, "예전 PASS는 히스토리로 내려간다");
-  assert.ok(html.indexOf("ERROR") < html.indexOf("이전 실행"), "ERROR가 최신 줄");
+  assert.match(html, /class="dot ok" href="browse-15\/report\.html"/, "예전 PASS는 이력 점으로 내려간다");
+  assert.ok(html.indexOf(">ERROR<") < html.indexOf('class="dot ok"'), "ERROR가 최신 줄");
 });
 
 test("a run still in progress shows RUNNING and is not counted as failure", async () => {
