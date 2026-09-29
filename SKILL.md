@@ -48,6 +48,7 @@ description: 웹 앱이나 데스크톱 앱(Tauri)의 한 기능을 E2E로 실�
 | `click` | Playwright 셀렉터 | 10초 안에 클릭 가능해야 함 |
 | `fill` | `[셀렉터, 값]` | |
 | `select` | `[셀렉터, value]` | `<select>` 전용. `fill` 로는 안 바뀌고 option 클릭도 헤드리스에서 안 먹는다. 보이는 라벨이 아니라 **`value`** 를 준다 |
+| `upload` | `[셀렉터, 경로 또는 경로 배열]` | `input[type=file]` 에 파일을 넣는다(숨김 input 도 가능, OS 파일 창 안 띄움). 경로는 시나리오 파일 기준 |
 | `expect` | `{ url?, text?, visible?, hidden? }` | `url`이 `/`로 시작하면 pathname 일치, 아니면 포함. `hidden` 은 셀렉터가 **안 보여야** 통과(없어야 맞는 것 확인용 — 앞 단계에서 화면이 떴는지 먼저 `visible` 로 잡아야 헛통과가 안 난다). 10초 대기 |
 
 어느 단계든 `"timeout": <ms>` 를 같은 줄에 붙이면 그 단계만 더 기다린다(기본 10초).

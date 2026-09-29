@@ -24,6 +24,10 @@ function lines(step) {
   if (step.click != null) return [`await page.click(${q(step.click)}${o});`];
   if (step.fill != null) return [`await page.fill(${q(step.fill[0])}, ${q(step.fill[1])}${o});`];
   if (step.select != null) return [`await page.selectOption(${q(step.select[0])}, ${q(step.select[1])}${o});`];
+  if (step.upload != null) {
+    const files = Array.isArray(step.upload[1]) ? step.upload[1] : [step.upload[1]];
+    return [`await page.setInputFiles(${q(step.upload[0])}, [${files.map(q).join(", ")}]${o});`];
+  }
   if (step.expect != null) {
     const { url, text, visible, hidden } = step.expect;
     const out = [];

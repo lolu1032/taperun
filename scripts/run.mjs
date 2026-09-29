@@ -147,7 +147,8 @@ export async function run(scenario, { out = ".taperun/out", headed = false, base
     const rec = { i, step, ok: true, ms: 0 };
     try {
       // 세션 브라우저는 시나리오마다 baseURL 이 달라 컨텍스트에 못 건다 — 상대 경로는 여기서 붙인다
-      const abs = useSession && step.goto != null && scenario.baseURL ? { ...step, goto: new URL(step.goto, scenario.baseURL).href } : step;
+      let abs = useSession && step.goto != null && scenario.baseURL ? { ...step, goto: new URL(step.goto, scenario.baseURL).href } : step;
+      if (abs.upload != null) abs = { ...abs, __baseDir: baseDir };
       await runStep(page, abs);
     } catch (e) {
       rec.ok = ok = false;
@@ -238,6 +239,13 @@ async function runStep(page, step) {
   if (step.fill != null) { await glide(page, step.fill[0]); return page.fill(step.fill[0], step.fill[1], { timeout }); }
   // <select> 는 fill 로 안 바뀌고, 헤드리스에서 option 클릭도 안 먹는다. 값(value)으로 고른다.
   if (step.select != null) { await glide(page, step.select[0]); return page.selectOption(step.select[0], step.select[1], { timeout }); }
+  // 파일 올리기: [input[type=file] 셀렉터, 경로 | 경로 배열]. 경로는 시나리오 파일 기준.
+  // 숨겨진 file input 에도 바로 넣는다 — OS 파일 선택 창을 띄우지 않는다.
+  if (step.upload != null) {
+    const [sel, files] = step.upload;
+    const list = (Array.isArray(files) ? files : [files]).map((f) => resolve(step.__baseDir ?? ".", f));
+    return page.setInputFiles(sel, list, { timeout });
+  }
   if (step.expect != null) {
     const { url, text, visible, hidden } = step.expect;
     if (url != null) {
