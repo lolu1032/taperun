@@ -1,36 +1,37 @@
-# Release Notes
+# 릴리즈 노트
 
-## 2026-09-28: Reports you can read at a glance, one browser for many scenarios
+## 2026-09-29 — 한눈에 읽히는 리포트, 여러 시나리오를 한 브라우저에서, 파일 올리기
 
-Changes that came out of running a real web app's issue QA (13 items) through taperun.
+실제 웹앱 이슈 QA(31건)를 taperun 으로 돌리며 나온 개선이다.
 
-### Run
-- **Several scenarios in one browser.** `run.mjs a.json b.json c.json [--headed]` launches Chrome once and runs the scenarios one after another **in a single page**.
-  - It opens no new tab either. In headed Chrome a new tab opens as a new window, and macOS brings Chrome to the front every time, taking focus.
-  - Video is recorded per scenario with `page.screencast`.
-  - Between scenarios the page goes to a blank page, then cookies and the storage of every origin visited (localStorage, IndexedDB, sessionStorage) are cleared. Each scenario starts as if on a new profile.
-  - webkit, firefox and `profile: shared` scenarios still get their own browser, even when mixed into the batch.
-- **`expect.hidden`.** The step passes when the selector is not visible, for checking that something should be absent. A `visible` check must come first to confirm the screen has loaded, otherwise the step passes without testing anything.
-- **Diagnosis of failed steps.** When a step fails, `result.json` gets `diag`:
-  - The state of the target element: missing, hidden, disabled, or visible but covered.
-  - Warning text on screen: `role=alert` or red text.
-  - Example: `대상 요소가 비활성(disabled)` + «만들 수 있는 워크스페이스를 모두 사용했어요 (3/3)».
-- **Symlink paths now run.** When the skill folder was a symlink (`~/.claude/skills/taperun`), `run.mjs` exited silently without running. It now compares real paths.
+### 실행
+- **여러 시나리오를 한 브라우저에서** — `run.mjs a.json b.json c.json [--headed]` 는 크롬을 한 번만 띄우고 **한 페이지에서 차례로** 돈다.
+  - 새 탭도 열지 않는다. 헤디드 크롬은 새 탭이 새 창으로 떠서 macOS 가 그때마다 크롬을 앞으로 가져와 포커스를 뺏는다.
+  - 영상은 `page.screencast` 로 시나리오마다 따로 남는다.
+  - 시나리오 사이에 빈 페이지로 빠진 뒤, 쿠키와 방문한 origin 의 저장소(localStorage·IndexedDB·sessionStorage)를 지운다. 새 프로필과 같은 조건으로 시작한다.
+  - webkit·firefox·`profile: shared` 시나리오는 섞여 있어도 그것만 따로 띄운다.
+- **`upload` 단계** — `[셀렉터, 경로 | 경로 배열]` 로 `input[type=file]` 에 파일을 넣는다. 숨김 input 도 되고 OS 파일 창을 띄우지 않는다. 경로는 시나리오 파일 기준. 뽑은 테스트코드는 `page.setInputFiles` 로 나간다.
+- **`expect.hidden`** — 셀렉터가 **안 보여야** 통과한다. 없어야 맞는 것을 확인할 때 쓴다. 앞 단계에서 화면이 떴는지 먼저 `visible` 로 잡아야 헛통과가 안 난다.
+- **실패 진단** — 단계가 실패하면 `result.json` 에 `diag` 가 붙는다.
+  - 대상 요소 상태: 없음 / 안 보임 / 비활성 / 보이지만 가려짐
+  - 화면에 떠 있는 경고 문구: `role=alert` 또는 빨간 글씨
+  - 예: `대상 요소가 비활성(disabled)` + «만들 수 있는 워크스페이스를 모두 사용했어요 (3/3)»
+- **심링크 경로에서도 실행** — 스킬 폴더가 심링크(`~/.claude/skills/taperun`)면 `run.mjs` 가 아무것도 안 하고 끝나던 문제. 실제 경로로 비교한다.
 
-### Scenario fields (optional)
-- `title`: shown as one line under the scenario name in the list and in the report.
-- `issue: { id, url, title, check, criteria, note }`: the «이슈» card in the detail report.
-  - It records what the run checks and what counts as a pass.
-  - `note` records what this scenario does **not** cover.
+### 시나리오 필드 (선택)
+- `title`: 목록과 리포트에서 이름 아래 한 줄로 보인다.
+- `issue: { id, url, title, check, criteria, note }`: 상세 리포트의 «이슈» 카드.
+  - 무엇을 확인하려는 실행인지, 판단 기준을 적는다.
+  - `note` 에는 이 시나리오가 **못 본** 범위를 적는다.
 
-### Report
-- **The list (index.html) is one table.** One row per scenario, failures on top, the rest sorted by name.
-  - Each row has the failure reason and diagnosis on one line.
-  - History is up to 8 dots, and clicking a dot opens that run's report.
-- **Videos open in an overlay.** Clicking «영상» opens a player on the same page. Esc, clicking outside or ✕ closes it. ⌘-click opens a new tab as before.
-- The detail report shows `title` next to the heading, the «이슈» card under the summary, and the failure diagnosis on the failure card.
+### 리포트
+- **목록(index.html)을 표 하나로** — 시나리오당 한 줄, 실패가 위, 나머지는 이름순.
+  - 줄마다 실패 사유와 진단이 한 줄로 붙는다.
+  - 이력은 최근 8회를 점으로 보이고, 점을 누르면 그 회차 리포트가 열린다.
+- **영상은 확대 창으로** — «영상» 을 누르면 같은 페이지에서 플레이어가 뜬다. Esc·바깥 클릭·✕ 로 닫는다. ⌘-클릭은 예전처럼 새 탭.
+- 상세 리포트: 제목 옆에 `title`, 요약 아래 «이슈» 카드, 실패 카드에 진단.
 
-### Tests
-- 18 pass.
-- New: the session test. One page is reused, cookies, localStorage and sessionStorage don't leak into the next scenario, and each scenario gets its own video.
-- Updated: two index tests changed to the table layout, where history is shown as dots.
+### 테스트
+- 18개 통과.
+- 추가: 세션 테스트 — 한 페이지를 재사용하고, 쿠키·localStorage·sessionStorage 가 다음 시나리오로 새지 않고, 시나리오마다 영상이 따로 남는다.
+- 수정: 목록 테스트 2개를 표 배치(이력 점)에 맞췄다.
