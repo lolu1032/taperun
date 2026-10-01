@@ -9,6 +9,8 @@ test("pass report", () => {
   assert.match(html, /PASS/);
   assert.match(html, /src="video\.webm"/, "video path is relative");
   assert.doesNotMatch(html, /실패:/);
+  assert.match(html, /<a class="vid" href="video\.webm"/, "video click opens the zoom dialog");
+  assert.match(html, /<dialog id="player">/);
 });
 
 test("fail report shows failed step, screenshot, escaped error, skipped count", () => {

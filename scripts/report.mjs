@@ -19,7 +19,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px
 .meta{color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin:0 0 24px}.meta span::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--line);margin-right:8px;vertical-align:middle}
 .grid{display:grid;grid-template-columns:1fr;gap:20px}@media(min-width:820px){.grid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
-video{width:100%;border-radius:10px;background:#000;display:block}
+video{width:100%;border-radius:10px;background:#000;display:block}a.vid video{cursor:zoom-in}
 .steps{list-style:none;margin:0;padding:0}.steps li{display:grid;grid-template-columns:28px 1fr auto;gap:12px;padding:10px 0;border-top:1px solid var(--line);align-items:start}.steps li:first-child{border-top:0}
 .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--ok)}.fail .n{background:var(--fail)}.skip .n{background:var(--skip)}
 .verb{display:inline-block;font:600 11px/1 var(--mono);padding:3px 7px;border-radius:5px;background:var(--bg);border:1px solid var(--line);margin-right:8px;text-transform:uppercase}
@@ -54,6 +54,19 @@ details summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-sp
 .issue dl{margin:0;display:grid;grid-template-columns:72px 1fr;gap:8px 12px;font-size:13px}.issue dt{color:var(--muted)}.issue dd{margin:0;white-space:pre-wrap}
 `;
 
+// 영상 확대 창. 두 리포트가 같이 쓴다
+const PLAYER = `<dialog id="player"><div class="ph"><b></b><button type="button" aria-label="닫기">✕</button></div><video controls autoplay></video></dialog>
+<script>
+// 영상 링크는 페이지를 떠나지 않고 확대 창으로 연다. Esc·바깥 클릭·✕ 로 닫는다
+const d = document.getElementById("player"), v = d.querySelector("video");
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a.vid"); if (!a || e.metaKey || e.ctrlKey) return;
+  e.preventDefault(); d.querySelector("b").textContent = a.dataset.title; v.src = a.getAttribute("href"); d.showModal();
+});
+d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("button")) d.close(); });
+d.addEventListener("close", () => { v.pause(); v.removeAttribute("src"); v.load(); });
+</script>`;
+
 // 시나리오의 issue: { id, url, title, check, criteria, note } — 전부 선택. 이 실행이 무엇을 확인하려던 건지 사람이 읽는 칸
 const issueCard = (i) => {
   if (!i) return "";
@@ -78,7 +91,7 @@ export function render(r) {
 <header><h1>${esc(r.name)}</h1>${r.title ? `<span style="color:var(--muted)">${esc(r.title)}</span>` : ""}<span class="pill ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span></header>
 <p class="meta"><span>${esc(r.startedAt.replace("T", " ").slice(0, 19))}</span><span>${fmtMs(r.durationMs)}</span><span>${passed}/${total} 단계${r.skipped ? ` · ${r.skipped} 건너뜀` : ""}</span></p>
 <div class="grid">
-<div class="card"><h2>영상</h2><video controls preload="metadata" src="${esc(basename(r.video))}"></video></div>
+<div class="card"><h2>영상</h2><a class="vid" href="${esc(basename(r.video))}" data-title="${esc(r.name)}" title="눌러서 확대"><video muted preload="metadata" src="${esc(basename(r.video))}"></video></a></div>
 <div class="side"><div class="card"><h2>요약</h2>
 <div class="stat"><div><b style="color:var(--ok)">${passed}</b><small>통과</small></div><div><b style="color:var(--fail)">${failed ? 1 : 0}</b><small>실패</small></div><div><b style="color:var(--skip)">${r.skipped}</b><small>건너뜀</small></div></div>
 <div class="bar"><i class="ok" style="width:${(passed / total) * 100}%"></i>${failed ? `<i class="fail" style="width:${100 / total}%"></i>` : ""}</div>
@@ -89,7 +102,8 @@ ${issueCard(r.issue)}</div>
 <div class="card" style="margin-top:20px"><h2>단계</h2><ol class="steps">${[...r.steps, ...skippedSteps].map(li).join("")}</ol></div>
 ${failed ? `<div class="card failbox" style="margin-top:20px"><h2>실패: ${failed.i + 1}단계</h2><pre>${esc(failed.error)}</pre>${failed.diag ? `<ul style="margin:12px 0 0;padding-left:18px">${failed.diag.target ? `<li>${esc(failed.diag.target)}</li>` : ""}${(failed.diag.alerts ?? []).map((a) => `<li>화면 문구: «${esc(a)}»</li>`).join("")}</ul>` : ""}${failed.screenshot ? `<a class="shot" href="${esc(basename(failed.screenshot))}" target="_blank"><img src="${esc(basename(failed.screenshot))}" alt="실패 스크린샷"></a>` : ""}</div>` : ""}
 ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed ? " open" : ""}><summary>콘솔·네트워크 (${r.console.length})</summary><pre>${r.console.map((c) => esc(`[${c.type}] ${c.text}`)).join("\n")}</pre></details></div>` : ""}
-</div></html>`;
+</div>
+${PLAYER}</html>`;
 }
 
 const when = (iso) => iso.replace("T", " ").slice(0, 16);
@@ -153,17 +167,7 @@ export function renderIndex(runs, broken = []) {
 <thead><tr><th></th><th>시나리오</th><th class="num">단계</th><th class="num">시간</th><th class="num">실행</th><th>실패 사유</th><th>이력</th><th></th></tr></thead>
 <tbody>${groups.map(row).join("")}</tbody></table></div>
 </div>
-<dialog id="player"><div class="ph"><b></b><button type="button" aria-label="닫기">✕</button></div><video controls autoplay></video></dialog>
-<script>
-// 영상 링크는 페이지를 떠나지 않고 확대 창으로 연다. Esc·바깥 클릭·✕ 로 닫는다
-const d = document.getElementById("player"), v = d.querySelector("video");
-document.addEventListener("click", (e) => {
-  const a = e.target.closest("a.vid"); if (!a || e.metaKey || e.ctrlKey) return;
-  e.preventDefault(); d.querySelector("b").textContent = a.dataset.title; v.src = a.getAttribute("href"); d.showModal();
-});
-d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("button")) d.close(); });
-d.addEventListener("close", () => { v.pause(); v.removeAttribute("src"); v.load(); });
-</script></html>`;
+${PLAYER}</html>`;
 }
 
 // out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
