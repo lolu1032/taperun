@@ -19,7 +19,7 @@ header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px
 .meta{color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin:0 0 24px}.meta span::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--line);margin-right:8px;vertical-align:middle}
 .grid{display:grid;grid-template-columns:1fr;gap:20px}@media(min-width:820px){.grid{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr)}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px}.card h2{font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:0 0 12px}
-video{width:100%;border-radius:10px;background:#000;display:block}
+video{width:100%;border-radius:10px;background:#000;display:block}a.vid video{cursor:zoom-in}
 .steps{list-style:none;margin:0;padding:0}.steps li{display:grid;grid-template-columns:28px 1fr auto;gap:12px;padding:10px 0;border-top:1px solid var(--line);align-items:start}.steps li:first-child{border-top:0}
 .n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;color:#fff;background:var(--ok)}.fail .n{background:var(--fail)}.skip .n{background:var(--skip)}
 .verb{display:inline-block;font:600 11px/1 var(--mono);padding:3px 7px;border-radius:5px;background:var(--bg);border:1px solid var(--line);margin-right:8px;text-transform:uppercase}
@@ -38,7 +38,42 @@ details summary{cursor:pointer;font-size:13px;text-transform:uppercase;letter-sp
 .links{margin-left:auto;display:flex;gap:10px}.links a{color:var(--accent);text-decoration:none;font-size:13px}.links a:hover{text-decoration:underline}
 .why{margin:8px 0 0;padding:8px 10px;border-radius:8px;background:var(--fail-bg);border:1px solid var(--fail);font:12.5px/1.5 var(--mono);word-break:break-all}
 .hist{margin-top:8px}.hist summary{cursor:pointer;color:var(--muted);font-size:12px}.hist ol{list-style:none;margin:8px 0 0;padding:0}.hist li{display:flex;gap:10px;align-items:center;padding:4px 0;font-size:12px;color:var(--muted);border:0}
+.wide{max-width:1400px}.card.flat{padding:0;overflow-x:auto}
+.idx{width:100%;border-collapse:collapse;font-size:13px}.idx th{text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.idx td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:middle;white-space:nowrap}.idx tr:last-child td{border-bottom:0}.idx tr.bad{background:var(--fail-bg)}
+.idx .name a{color:var(--fg);font-weight:600;text-decoration:none}.idx .name small{display:block;color:var(--muted);font-size:12px;white-space:normal;max-width:360px}.idx .name a:hover{color:var(--accent)}.idx a{color:var(--accent);text-decoration:none}
+.idx .num,.idx th.num{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.idx .reason{white-space:normal;min-width:260px;font:12px/1.45 var(--mono);color:var(--fail)}.idx .reason span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-all}
+.idx .reason em{display:block;font:12px/1.45 -apple-system,"Pretendard",system-ui,sans-serif;font-style:normal;color:var(--fg);margin-top:2px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:3px;background:var(--ok)}.dot.fail{background:var(--fail)}.dot.run{background:var(--muted)}
+#player{padding:0;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--fg);width:min(1200px,94vw);max-height:94vh}#player::backdrop{background:rgba(0,0,0,.75)}
+#player .ph{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;font-size:14px}#player .ph button{background:none;border:0;color:var(--muted);font-size:18px;cursor:pointer;width:32px;height:32px}#player .ph button:hover{color:var(--fg)}
+#player video{display:block;width:100%;max-height:calc(94vh - 52px);background:#000;border-radius:0}
+.side{display:flex;flex-direction:column;gap:20px;min-width:0}
+.issue .it{margin:0 0 10px;font-weight:600;font-size:15px}.issue .it a{color:var(--accent);text-decoration:none}
+.issue dl{margin:0;display:grid;grid-template-columns:72px 1fr;gap:8px 12px;font-size:13px}.issue dt{color:var(--muted)}.issue dd{margin:0;white-space:pre-wrap}
 `;
+
+// 영상 확대 창. 두 리포트가 같이 쓴다
+const PLAYER = `<dialog id="player"><div class="ph"><b></b><button type="button" aria-label="닫기">✕</button></div><video controls autoplay></video></dialog>
+<script>
+// 영상 링크는 페이지를 떠나지 않고 확대 창으로 연다. Esc·바깥 클릭·✕ 로 닫는다
+const d = document.getElementById("player"), v = d.querySelector("video");
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a.vid"); if (!a || e.metaKey || e.ctrlKey) return;
+  e.preventDefault(); d.querySelector("b").textContent = a.dataset.title; v.src = a.getAttribute("href"); d.showModal();
+});
+d.addEventListener("click", (e) => { if (e.target === d || e.target.closest("button")) d.close(); });
+d.addEventListener("close", () => { v.pause(); v.removeAttribute("src"); v.load(); });
+</script>`;
+
+// 시나리오의 issue: { id, url, title, check, criteria, note } — 전부 선택. 이 실행이 무엇을 확인하려던 건지 사람이 읽는 칸
+const issueCard = (i) => {
+  if (!i) return "";
+  const row = (k, v) => (v ? `<dt>${k}</dt><dd>${esc(v)}</dd>` : "");
+  const head = i.id ? (i.url ? `<a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.id)}</a>` : esc(i.id)) : "";
+  return `<div class="card issue"><h2>이슈</h2>${head || i.title ? `<p class="it">${head} ${esc(i.title ?? "")}</p>` : ""}<dl>${row("시나리오", i.check)}${row("판단 기준", i.criteria)}${row("메모", i.note)}</dl></div>`;
+};
 
 export function render(r) {
   const total = r.steps.length + r.skipped;
@@ -53,20 +88,22 @@ export function render(r) {
 <title>${esc(r.name)} — ${r.ok ? "PASS" : "FAIL"}</title><style>${CSS}</style>
 <div class="wrap">
 <a class="back" href="../index.html">← 전체</a>
-<header><h1>${esc(r.name)}</h1><span class="pill ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span></header>
+<header><h1>${esc(r.name)}</h1>${r.title ? `<span style="color:var(--muted)">${esc(r.title)}</span>` : ""}<span class="pill ${r.ok ? "ok" : "fail"}">${r.ok ? "PASS" : "FAIL"}</span></header>
 <p class="meta"><span>${esc(r.startedAt.replace("T", " ").slice(0, 19))}</span><span>${fmtMs(r.durationMs)}</span><span>${passed}/${total} 단계${r.skipped ? ` · ${r.skipped} 건너뜀` : ""}</span></p>
 <div class="grid">
-<div class="card"><h2>영상</h2><video controls preload="metadata" src="${esc(basename(r.video))}"></video></div>
-<div class="card"><h2>요약</h2>
+<div class="card"><h2>영상</h2><a class="vid" href="${esc(basename(r.video))}" data-title="${esc(r.name)}" title="눌러서 확대"><video muted preload="metadata" src="${esc(basename(r.video))}"></video></a></div>
+<div class="side"><div class="card"><h2>요약</h2>
 <div class="stat"><div><b style="color:var(--ok)">${passed}</b><small>통과</small></div><div><b style="color:var(--fail)">${failed ? 1 : 0}</b><small>실패</small></div><div><b style="color:var(--skip)">${r.skipped}</b><small>건너뜀</small></div></div>
 <div class="bar"><i class="ok" style="width:${(passed / total) * 100}%"></i>${failed ? `<i class="fail" style="width:${100 / total}%"></i>` : ""}</div>
 ${failed ? `<p style="margin:14px 0 0"><b>${failed.i + 1}단계</b>에서 멈춤 — <span class="args">${esc(verb(failed.step))} ${esc(args(failed.step))}</span></p>` : `<p style="margin:14px 0 0">모든 단계 통과.</p>`}
 </div>
+${issueCard(r.issue)}</div>
 </div>
 <div class="card" style="margin-top:20px"><h2>단계</h2><ol class="steps">${[...r.steps, ...skippedSteps].map(li).join("")}</ol></div>
-${failed ? `<div class="card failbox" style="margin-top:20px"><h2>실패: ${failed.i + 1}단계</h2><pre>${esc(failed.error)}</pre>${failed.screenshot ? `<a class="shot" href="${esc(basename(failed.screenshot))}" target="_blank"><img src="${esc(basename(failed.screenshot))}" alt="실패 스크린샷"></a>` : ""}</div>` : ""}
+${failed ? `<div class="card failbox" style="margin-top:20px"><h2>실패: ${failed.i + 1}단계</h2><pre>${esc(failed.error)}</pre>${failed.diag ? `<ul style="margin:12px 0 0;padding-left:18px">${failed.diag.target ? `<li>${esc(failed.diag.target)}</li>` : ""}${(failed.diag.alerts ?? []).map((a) => `<li>화면 문구: «${esc(a)}»</li>`).join("")}</ul>` : ""}${failed.screenshot ? `<a class="shot" href="${esc(basename(failed.screenshot))}" target="_blank"><img src="${esc(basename(failed.screenshot))}" alt="실패 스크린샷"></a>` : ""}</div>` : ""}
 ${r.console.length ? `<div class="card" style="margin-top:20px"><details${failed ? " open" : ""}><summary>콘솔·네트워크 (${r.console.length})</summary><pre>${r.console.map((c) => esc(`[${c.type}] ${c.text}`)).join("\n")}</pre></details></div>` : ""}
-</div></html>`;
+</div>
+${PLAYER}</html>`;
 }
 
 const when = (iso) => iso.replace("T", " ").slice(0, 16);
@@ -90,28 +127,47 @@ export function renderIndex(runs, broken = []) {
   const running = latest.filter((x) => x.running).length;
   const badge = bad ? { cls: "fail", text: `FAIL ${bad}` } : running ? { cls: "run", text: `RUNNING ${running}` } : { cls: "ok", text: "ALL PASS" };
 
-  const tag = (x) => (x.running ? '<span class="tag run">RUNNING</span>' : x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
-  const li = (x, history) => {
+  const tag = (x) => (x.running ? '<span class="tag run">RUN</span>' : x.error ? '<span class="tag fail">ERROR</span>' : `<span class="tag ${x.r.ok ? "ok" : "fail"}">${x.r.ok ? "PASS" : "FAIL"}</span>`);
+  const isBad = (x) => (x.error && !x.running) || (x.r && !x.r.ok);
+  // 한 줄 사유: 실패 단계 + 셀렉터 + 에러 첫 줄. 전문은 title(마우스오버)과 리포트에 있다
+  const why = (x) => {
+    if (x.error) return { short: x.error, full: x.error };
     const f = x.r?.steps.find((s) => !s.ok);
-    const total = x.r ? x.r.steps.length + x.r.skipped : 0;
-    return `<li>
-<div class="row">${tag(x)}<span class="name">${esc(x.name)}</span>
-<span class="when">${x.at ? when(x.at) : "읽지 못함"}</span>
-${x.r ? `<span class="nums">${x.r.steps.filter((s) => s.ok).length}/${total} 단계 · ${fmtMs(x.r.durationMs)}</span>
-<span class="links"><a href="${esc(enc(x.dir))}/report.html">리포트</a><a href="${esc(enc(x.dir))}/${esc(enc(basename(x.r.video)))}">영상</a></span>` : `<span class="nums">${esc(x.dir)}</span>`}</div>
-${x.error ? `<p class="why">${esc(x.error)}</p>` : ""}
-${f ? `<p class="why">${f.i + 1}단계 ${esc(verb(f.step))} ${esc(args(f.step))} — ${esc(f.error)}</p>` : ""}
-${history.length ? `<details class="hist"><summary>이전 실행 ${history.length}회</summary><ol>${history.map((h) => `<li>${tag(h)}<span>${h.at ? when(h.at) : "-"}</span><span>${h.r ? fmtMs(h.r.durationMs) : esc(h.dir)}</span>${h.r ? `<span class="links"><a href="${esc(enc(h.dir))}/report.html">리포트</a></span>` : ""}</li>`).join("")}</ol></details>` : ""}
-</li>`;
+    if (!f) return null;
+    const head = `${f.i + 1}단계 ${verb(f.step)} ${args(f.step)}`;
+    const err = String(f.error ?? "").split("\n")[0].replace(/^\w+\.\w+: /, "");
+    const d = f.diag ? [f.diag.target, ...(f.diag.alerts ?? []).map((a) => `화면: «${a}»`)].filter(Boolean).join(" · ") : "";
+    return { short: `${head} — ${err}`, diag: d, full: `${head}\n${f.error ?? ""}${d ? `\n${d}` : ""}` };
   };
+  const dot = (h) => `<a class="dot ${h.running ? "run" : isBad(h) ? "fail" : "ok"}" href="${esc(enc(h.dir))}/report.html" title="${h.at ? when(h.at) : "-"} ${h.running ? "RUN" : isBad(h) ? "FAIL" : "PASS"}"></a>`;
+  const row = (v) => {
+    const x = v[0], w = why(x);
+    const total = x.r ? x.r.steps.length + x.r.skipped : 0;
+    return `<tr class="${isBad(x) ? "bad" : ""}">
+<td>${tag(x)}</td>
+<td class="name">${x.r ? `<a href="${esc(enc(x.dir))}/report.html">${esc(x.name)}</a>` : esc(x.name)}${x.r?.title ? `<small>${esc(x.r.title)}</small>` : ""}</td>
+<td class="num">${x.r ? `${x.r.steps.filter((s) => s.ok).length}/${total}` : "-"}</td>
+<td class="num">${x.r ? fmtMs(x.r.durationMs) : "-"}</td>
+<td class="num">${x.at ? when(x.at).slice(5) : "-"}</td>
+<td class="reason">${w ? `<span title="${esc(w.full)}">${esc(w.short)}</span>${w.diag ? `<em>${esc(w.diag)}</em>` : ""}` : ""}</td>
+<td class="hist">${v.slice(0, 8).reverse().map(dot).join("")}</td>
+<td class="num">${x.r ? `<a class="vid" href="${esc(enc(x.dir))}/${esc(enc(basename(x.r.video)))}" data-title="${esc(x.name)}">영상</a>` : ""}</td>
+</tr>`;
+  };
+  // 실패 먼저, 그 안에서는 이름순 — 번호 붙은 시나리오(b-2942 …)가 나란히 온다
+  const groups = [...byName.values()].sort((a, b) => (isBad(b[0]) - isBad(a[0])) || a[0].name.localeCompare(b[0].name));
+  const pass = latest.filter((x) => x.r?.ok).length;
 
   return `<!doctype html><html lang="ko"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>taperun — ${bad ? `실패 ${bad}` : running ? `실행 중 ${running}` : "전체 통과"}</title><style>${CSS}</style>
-<div class="wrap">
+<div class="wrap wide">
 <header><h1>taperun</h1><span class="pill ${badge.cls}">${badge.text}</span></header>
-<p class="meta"><span>시나리오 ${latest.length}개</span><span>실행 ${items.length}회</span><span>마지막 ${latest.length && latest[0].at ? when(latest[0].at) : "-"}</span></p>
-<div class="card"><ol class="runs">${[...byName.values()].map((v) => li(v[0], v.slice(1))).join("")}</ol></div>
-</div></html>`;
+<p class="meta"><span>시나리오 ${latest.length}개 · <b style="color:var(--ok)">통과 ${pass}</b> · <b style="color:var(--fail)">실패 ${bad}</b>${running ? ` · 실행 중 ${running}` : ""}</span><span>실행 ${items.length}회</span><span>마지막 ${latest.length && latest[0].at ? when(latest[0].at) : "-"}</span></p>
+<div class="card flat"><table class="idx">
+<thead><tr><th></th><th>시나리오</th><th class="num">단계</th><th class="num">시간</th><th class="num">실행</th><th>실패 사유</th><th>이력</th><th></th></tr></thead>
+<tbody>${groups.map(row).join("")}</tbody></table></div>
+</div>
+${PLAYER}</html>`;
 }
 
 // out 폴더를 훑어 각 실행의 report.html과 index.html을 쓴다
